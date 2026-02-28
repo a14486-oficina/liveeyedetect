@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Receiver - PC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+    video { 
+        width: 100%;          /* ocupa 100% da largura do container */
+        max-width: 800px;     /* largura máxima */
+        height: 600px;         /* mantém proporção */
+        border-radius: 10px;  
+        transform: scale(1.0); /* escala do vídeo */
+    }
+    </style>
+</head>
+<body>
+    <h2>PC - Receber Vídeo</h2>
+        <video id="remoteVideo" autoplay playsinline controls></video>
+    <p id="status">A aguardar ligação...</p>
+
+    <script src="receiver.js"></script>
+</body>
+</html>

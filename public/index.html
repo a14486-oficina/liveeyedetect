@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Captura de Vídeo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        video { 
+            width: 100%;          /* ocupa 100% da largura do container */
+            max-width: 400px;     /* largura máxima */
+            height: auto;         /* mantém proporção */
+            border-radius: 10px;  
+            transform: scale(1.0); /* escala do vídeo */
+        }
+</style>
+</head>
+<body>
+    <h2>Telemóvel - Enviar Vídeo</h2>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <p id="status">A aguardar permissão da câmara...</p>
+
+    <script src="client.js"></script>
+
+</body>
+</html>

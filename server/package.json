@@ -1,0 +1,17 @@
+{
+  "name": "webrtc-simple",
+  "version": "1.0.0",
+  "description": "Simple WebRTC signaling server",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

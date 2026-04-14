@@ -4,7 +4,8 @@
   "description": "Simple WebRTC signaling server",
   "main": "server.js",
   "dependencies": {
-    "ws": "^8.19.0"
+    "express": "^5.2.1",
+    "ws": "^8.20.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

@@ -13,11 +13,37 @@
     }
     </style>
 </head>
-<body>
-    <h2>PC - Receber Vídeo</h2>
-        <video id="remoteVideo" autoplay playsinline controls></video>
-    <p id="status">A aguardar ligação...</p>
+<style>
+        #videoContainer {
+            position: relative;
+            display: inline-block;
+        }
 
-    <script src="receiver.js"></script>
+        #remoteVideo {
+            width: 800px;
+            background: black;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="videoContainer">
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+</div>
+
+<canvas id="captureCanvas" style="display:none;"></canvas>
+
+<p id="status">A aguardar ligação...</p>
+
+<script src="receiver.js"></script>
+
 </body>
 </html>

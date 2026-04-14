@@ -1,50 +1,370 @@
+/*
+// 1️⃣ WebRTC
+console.log("JS carregado");
 const socket = new WebSocket(
-            (location.protocol === "https:" ? "wss://" : "ws://") + location.host
-        );
+    (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+);
 
-        const pc = new RTCPeerConnection({
-            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-        });
+const pc = new RTCPeerConnection({
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+});
 
+const video = document.getElementById("remoteVideo");
+const status = document.getElementById("status");
+
+pc.ontrack = (event) => {
+    console.log("Track recebida:", event.streams);
+
+    if (!video.srcObject) {
+        video.srcObject = event.streams[0];
+    }
+
+    video.muted = false;
+    video.volume = 1;
+
+    video.play().catch(err => console.log("Erro autoplay:", err));
+    status.innerText = "Vídeo recebido!";
+};
+
+pc.onicecandidate = event => {
+    if (event.candidate) {
+        socket.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+    }
+};
+
+socket.onmessage = async (message) => {
+    const data = JSON.parse(message.data);
+
+    if (data.type === "offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.send(JSON.stringify({ type: "answer", answer }));
+    }
+
+    if (data.type === "ice") {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+    }
+};
+
+// 2️⃣ Canvas / overlay
+const canvas = document.getElementById("overlay");
+const ctx = canvas.getContext("2d");
+document.body.appendChild(canvas);
+
+function resizeCanvas() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+}
+video.addEventListener("loadeddata", resizeCanvas);
+
+// 3️⃣ YOLO ONNX real (coloca **depois de todo o resto**, no fim)
+let session;
+let inputName;
+/*
+async function loadModel() {
+    session = await ort.InferenceSession.create('./yoloAI/yolo26n.onnx');
+    inputName = session.inputNames[0];
+    console.log("Modelo YOLO carregado!");
+}
+
+// nova função teste com chagpt
+async function loadModel() {
+    try {
+        console.log("A carregar modelo...");
+        
+        session = await ort.InferenceSession.create('./yoloAI/yolo26n.onnx');
+        
+        inputName = session.inputNames[0];
+
+        console.log("Modelo YOLO carregado!");
+    } catch (error) {
+        console.error("ERRO AO CARREGAR MODELO:", error);
+    }
+}
+function preprocessFrame(video) {
+    const canvasTmp = document.createElement('canvas');
+    canvasTmp.width = 640;
+    canvasTmp.height = 640;
+    const ctxTmp = canvasTmp.getContext('2d');
+    ctxTmp.drawImage(video, 0, 0, 640, 640);
+    const imgData = ctxTmp.getImageData(0, 0, 640, 640);
+    const data = Float32Array.from(imgData.data).filter((_, i) => i % 4 !== 3);
+    return new ort.Tensor('float32', data, [1, 3, 640, 640]);
+}
+
+function drawBoxes(boxes) {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 3;
+    boxes.forEach(box => {
+        ctx.strokeRect(box[0], box[1], box[2]-box[0], box[3]-box[1]);
+    });
+}
+
+function postprocess(output) {
+    const data = output[Object.keys(output)[0]].data;
+    const boxes = [];
+
+    const numDetections = 8400; // padrão YOLO
+    const numClasses = 80;
+
+    for (let i = 0; i < numDetections; i++) {
+        const x = data[i];
+        const y = data[i + numDetections];
+        const w = data[i + numDetections * 2];
+        const h = data[i + numDetections * 3];
+
+        let maxScore = 0;
+        let classId = -1;
+
+        // procurar melhor classe
+        for (let c = 0; c < numClasses; c++) {
+            const score = data[i + numDetections * (4 + c)];
+            if (score > maxScore) {
+                maxScore = score;
+                classId = c;
+            }
+        }
+
+        // 👤 pessoa = classe 0
+        if (classId === 0 && maxScore > 0.5) {
+            const scaleX = canvas.width / 640;
+            const scaleY = canvas.height / 640;
+
+            boxes.push([
+                (x - w / 2) * scaleX,
+                (y - h / 2) * scaleY,
+                (x + w / 2) * scaleX,
+                (y + h / 2) * scaleY,
+                maxScore
+            ]);
+        }
+    }
+
+    return nonMaxSuppression(boxes, 0.5);
+}
+
+function nonMaxSuppression(boxes, iouThreshold) {
+    boxes.sort((a, b) => b[4] - a[4]);
+    const result = [];
+
+    function iou(a, b) {
+        const x1 = Math.max(a[0], b[0]);
+        const y1 = Math.max(a[1], b[1]);
+        const x2 = Math.min(a[2], b[2]);
+        const y2 = Math.min(a[3], b[3]);
+
+        const interArea = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+        const boxAArea = (a[2] - a[0]) * (a[3] - a[1]);
+        const boxBArea = (b[2] - b[0]) * (b[3] - b[1]);
+
+        return interArea / (boxAArea + boxBArea - interArea);
+    }
+
+    while (boxes.length > 0) {
+        const chosen = boxes.shift();
+        result.push(chosen);
+
+        boxes = boxes.filter(box => iou(chosen, box) < iouThreshold);
+    }
+
+    return result;
+}
+
+async function detectYOLO() {
+    if (video.videoWidth === 0 || !session) {
+        requestAnimationFrame(detectYOLO);
+        return;
+    }
+
+    const inputTensor = preprocessFrame(video);
+    const output = await session.run({ [inputName]: inputTensor });
+    const boxes = postprocess(output); // ainda precisas implementar
+
+    drawBoxes(boxes);
+    requestAnimationFrame(detectYOLO);
+}
+
+
+
+// inicializar YOLO **no fim do ficheiro**
+console.log("ANTES DO LOAD");
+
+loadModel().then(() => {
+    console.log("DEPOIS DO LOAD");
+    detectYOLO();
+});
+console.log(classId, score);
+*/
+
+const video = document.getElementById("remoteVideo");
+const canvas = document.getElementById("overlay");
+const ctx = canvas.getContext("2d");
+
+const captureCanvas = document.getElementById("captureCanvas");
+const captureCtx = captureCanvas.getContext("2d");
+
+
+
+    const socket = new WebSocket( 
+        (location.protocol === "https:" ? "wss://" : "ws://") + location.host ); 
+        
+    const pc = new RTCPeerConnection(
+        { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }
+    ); 
+
+    const status = document.getElementById("status"); 
+
+    pc.ontrack = (event) => {
+    console.log("Track recebida:", event.streams);
+
+    const video = document.getElementById("remoteVideo");
+
+    if (!video.srcObject) {
+        video.srcObject = event.streams[0];
+    }
+
+    video.onloadedmetadata = () => {
+        video.play();
+        console.log("Vídeo a funcionar!");
+    };
+};
+
+
+    socket.onmessage = async (message) => { 
+        const data = JSON.parse(message.data); 
+        if (data.type === "offer") { 
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer(); 
+            await pc.setLocalDescription(answer); 
+            socket.send(JSON.stringify({ type: "answer", answer })); 
+        } 
+        if (data.type === "ice") { 
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); 
+        } 
+    };
+    const wsYOLO = new WebSocket("ws://localhost:8000/ws");
+
+    /*
+    const captureCanvas = document.getElementById("captureCanvas");
+    const captureCtx = captureCanvas.getContext("2d");
+
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+    */
+
+    
+    function sendFrame() {
         const video = document.getElementById("remoteVideo");
-        const status = document.getElementById("status");
+        if (video.videoWidth === 0) return;
 
-        pc.ontrack = (event) => {
-            console.log("Track recebida:", event.streams);
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
 
-            if (!video.srcObject) {
-                video.srcObject = event.streams[0];
-            }
+        captureCtx.drawImage(video, 0, 0);
 
-            video.muted = false;
-            video.volume = 1;
+        if (wsYOLO.readyState === WebSocket.OPEN) {
+            const dataURL = captureCanvas.toDataURL("image/jpeg", 0.7);
+            wsYOLO.send(dataURL);
+        }
+    }
 
-            video.play().catch(err => {
-                console.log("Erro autoplay:", err);
-            });
+    setInterval(sendFrame, 200);
 
-            status.innerText = "Vídeo recebido!";
-        };
+    wsYOLO.onopen = () => {
+        console.log("Ligado ao YOLO backend");
+        sendFrame();
+    };
 
-        pc.onicecandidate = event => {
-            if (event.candidate) {
-                socket.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
-            }
-        };
+    wsYOLO.onclose = () => {
+        console.log("WebSocket fechado");
+    };
 
-        socket.onmessage = async (message) => {
-            const data = JSON.parse(message.data);
+    wsYOLO.onerror = (err) => {
+        console.log("Erro WebSocket:", err);
+    };
+    /*
 
-            if (data.type === "offer") {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+    1. versão
+    
+    wsYOLO.onmessage = (event) => {
+        const detections = JSON.parse(event.data);
 
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
+        console.log("Deteções:", detections); 
 
-                socket.send(JSON.stringify({ type: "answer", answer }));
-            }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (data.type === "ice") {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-            }
-        };
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+
+        detections.forEach(det => {
+            ctx.strokeRect(det.x, det.y, det.w, det.h);
+        });
+    };
+    */
+   /*
+
+    2. Versão
+
+    wsYOLO.onmessage = (event) => {
+        const detections = JSON.parse(event.data);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+
+        detections.forEach(det => {
+            ctx.strokeRect(det.x, det.y, det.w, det.h);
+        });
+    };
+    */
+
+    wsYOLO.onmessage = (event) => {
+        const detections = JSON.parse(event.data);
+
+        const rect = video.getBoundingClientRect();
+
+        const scaleX = rect.width / 640;
+        const scaleY = rect.height / 640;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+
+        detections.forEach(det => {
+            ctx.strokeRect(
+                det.x * scaleX,
+                det.y * scaleY,
+                det.w * scaleX,
+                det.h * scaleY
+            );
+        });
+    };
+
+    /*
+    video.addEventListener("loadeddata", () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    });
+    */
+    video.addEventListener("loadeddata", resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
+
+    setInterval(() => {
+    console.log("Video size:", video.videoWidth, video.videoHeight);
+    }, 2000);
+
+    function resizeCanvas() {
+    const rect = video.getBoundingClientRect();
+
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    }
+

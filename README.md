@@ -7,3 +7,6 @@ openCV (para tirar um print a frame sempre qeu vir uma pessoa)
 
 Qdrant 
 Para guardar os embeddigns e a extra info (payloads)
+
+
+Ver "style" video #remoteVideo, colocar 600px

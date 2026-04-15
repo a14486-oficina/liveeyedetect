@@ -11,3 +11,5 @@ Qdrant
 Para guardar os embeddigns e a extra info (payloads)
 
 Depois vou criar o sistema de alertar (vibração e llanterna a piscar)
+https://stackoverflow.com/questions/68786850/turn-on-phone-flashlight-on-web-app-using-javascript-and-html
+usar o javascript

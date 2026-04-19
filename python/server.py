@@ -53,6 +53,22 @@ import face_recognition
 app = FastAPI()
 model = YOLO("yolo26n.pt") # Nota: certifique-se que o nome do modelo está correto (ex: yolo11n.pt)
 
+# Lista de caminhos e nomes
+pessoas = [
+    {"nome": "Pessoa 1", "foto": r"C:\PAP\data\pessoasProcurar\pessoa1.jpg"},
+    {"nome": "Pessoa 2", "foto": r"C:\PAP\data\pessoasProcurar\pessoa2.jpg"}
+]
+
+known_face_encodings = []
+known_face_names = []
+
+for p in pessoas:
+    img = face_recognition.load_image_file(p["foto"])
+    encodings = face_recognition.face_encodings(img)
+    if encodings:
+        known_face_encodings.append(encodings[0])
+        known_face_names.append(p["nome"])
+
 # 🔹 carregar rosto conhecido
 try:
     known_image = face_recognition.load_image_file(r"C:\PAP\data\pessoasProcurar\pessoa1.jpg")
@@ -92,7 +108,28 @@ async def websocket_endpoint(ws: WebSocket):
                 if cls == 0 and known_encoding is not None:
                     person_img = frame[y1:y2, x1:x2]
 
+
+                if cls == 0 and len(known_face_encodings) > 0:
+                    person_img = frame[y1:y2, x1:x2]
+
+                    if person_img.size > 0:
+                        # Converte para RGB
+                        rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
+                        
+                        # 'number_of_times_to_upsample=2' ajuda a achar rostos pequenos
+                        face_locations = face_recognition.face_locations(rgb, model="hog", number_of_times_to_upsample=1)
+                        encodings = face_recognition.face_encodings(rgb, face_locations)
+
+                        for encoding in encodings:
+                            # Compara com toda a lista de conhecidos
+                            matches = face_recognition.compare_faces(known_face_encodings, encoding, tolerance=0.5)
+                            
+                            if True in matches:
+                                first_match_index = matches.index(True)
+                                name = known_face_names[first_match_index]
+                                break
                     '''
+                    # 1º fase
                     if person_img.size > 0:
                         # Reduzir a imagem para acelerar o reconhecimento facial
                         small_rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
@@ -105,9 +142,10 @@ async def websocket_endpoint(ws: WebSocket):
                             if True in match:
                                 name = "Pessoa conhecida"
                                 break # Achou, não precisa verificar outros rostos na mesma pessoa
-                    '''
+                    
 
                     # ... dentro do if cls == 0 ...
+                    #2 fase
                     if person_img.size > 0:
                         # 1. Redimensionar o recorte da pessoa para ser menor (ex: max 150px)
                         # Isso alivia MUITO o processador
@@ -149,7 +187,8 @@ async def websocket_endpoint(ws: WebSocket):
                                 name = "Pessoa conhecida"
                                 break
                             else:
-                                print("❌ Rosto detectado, mas NÃO coincide com a foto de referência.")                
+                                print("❌ Rosto detectado, mas NÃO coincide com a foto de referência.")     
+                            '''           
                     
 
                     

@@ -245,6 +245,13 @@ const captureCtx = captureCanvas.getContext("2d");
             await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); 
         } 
     };
+
+
+    video.onplay = () => {
+    console.log("Iniciando envio de frames...");
+    sendFrame();
+    };
+
     const wsYOLO = new WebSocket("ws://localhost:8000/ws");
 
     /*
@@ -255,29 +262,32 @@ const captureCtx = captureCanvas.getContext("2d");
     const ctx = canvas.getContext("2d");
     */
 
-    
+    let isWaitingForResponse = false;
+
     function sendFrame() {
         const video = document.getElementById("remoteVideo");
-        if (video.videoWidth === 0) return;
+        
+        // SÓ ENVIA SE: vídeo tiver tamanho, socket estiver aberto e não estivermos esperando resposta
+        if (video.videoWidth === 0 || wsYOLO.readyState !== WebSocket.OPEN || isWaitingForResponse) {
+            return; 
+        }
+
+        isWaitingForResponse = true; // Bloqueia novos envios até receber resposta
 
         captureCanvas.width = video.videoWidth;
         captureCanvas.height = video.videoHeight;
-
         captureCtx.drawImage(video, 0, 0);
 
-        if (wsYOLO.readyState === WebSocket.OPEN) {
-            const dataURL = captureCanvas.toDataURL("image/jpeg", 0.7);
-            wsYOLO.send(dataURL);
-        }
+        // 0.5 de qualidade ajuda MUITO na velocidade via ngrok/redes lentas
+        const dataURL = captureCanvas.toDataURL("image/jpeg", 0.5); 
+        wsYOLO.send(dataURL);
     }
-
-    setInterval(sendFrame, 200);
 
     wsYOLO.onopen = () => {
         console.log("Ligado ao YOLO backend");
-        sendFrame();
+        // Não chamamos sendFrame aqui direto, deixamos o loop de vídeo carregar
     };
-
+    
     wsYOLO.onclose = () => {
         console.log("WebSocket fechado");
     };
@@ -323,28 +333,38 @@ const captureCtx = captureCanvas.getContext("2d");
     */
 
     wsYOLO.onmessage = (event) => {
-        const detections = JSON.parse(event.data);
+        isWaitingForResponse = false; // Libera para enviar o próximo frame
 
+        const detections = JSON.parse(event.data);
+        const video = document.getElementById("remoteVideo");
         const rect = video.getBoundingClientRect();
 
-        const scaleX = rect.width / 640;
-        const scaleY = rect.height / 640;
+        // Cálculo dinâmico da escala baseado no tamanho REAL do vídeo recebido
+        const scaleX = rect.width / video.videoWidth;
+        const scaleY = rect.height / video.videoHeight;
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         ctx.strokeStyle = "red";
         ctx.lineWidth = 2;
+        ctx.fillStyle = "red";
+        ctx.font = "18px Arial";
 
         detections.forEach(det => {
-            ctx.strokeRect(
-                det.x * scaleX,
-                det.y * scaleY,
-                det.w * scaleX,
-                det.h * scaleY
-            );
-        });
-    };
+            const x = det.x * scaleX;
+            const y = det.y * scaleY;
+            const w = det.w * scaleX;
+            const h = det.h * scaleY;
 
+            ctx.strokeRect(x, y, w, h);
+            
+            if (det.name) {
+                ctx.fillText(det.name, x, y > 20 ? y - 5 : y + 20);
+            }
+        });
+
+        // Em vez de setInterval, chamamos o próximo frame com um pequeno delay de 50ms
+        setTimeout(sendFrame, 50); 
+    };
     /*
     video.addEventListener("loadeddata", () => {
         canvas.width = video.videoWidth;
@@ -359,12 +379,12 @@ const captureCtx = captureCanvas.getContext("2d");
     }, 2000);
 
     function resizeCanvas() {
-    const rect = video.getBoundingClientRect();
+        const rect = video.getBoundingClientRect();
 
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
 
-    canvas.style.width = rect.width + "px";
-    canvas.style.height = rect.height + "px";
+        canvas.style.width = rect.width + "px";
+        canvas.style.height = rect.height + "px";
     }
 

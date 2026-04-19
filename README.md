@@ -94,7 +94,7 @@ Se quiseres, posso ajudar-te a dar o próximo nível:
 Só diz 👍
 
 ---------------------------------------
-Cenas a fazer 
+coisas a fazer 
 
 Ver "style" video #remoteVideo, colocar 600px
 

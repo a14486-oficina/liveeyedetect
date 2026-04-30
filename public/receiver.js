@@ -217,35 +217,35 @@ const captureCtx = captureCanvas.getContext("2d");
 
     const status = document.getElementById("status"); 
 
+
     pc.ontrack = (event) => {
-    console.log("Track recebida:", event.streams);
-
-    const video = document.getElementById("remoteVideo");
-
-    if (!video.srcObject) {
+        const video = document.getElementById("remoteVideo");
         video.srcObject = event.streams[0];
+        
+        video.onloadedmetadata = () => {
+            video.play();
+            console.log("Vídeo recebido e a tocar. Dimensões:", video.videoWidth, "x", video.videoHeight);
+            // Garantir que o loop começa assim que houver vídeo real
+            setTimeout(sendFrame, 1000); 
+        };
+    };
+
+    
+
+    socket.onmessage = async (message) => {
+    const data = JSON.parse(message.data);
+    
+    if (data.type === "offer") {
+        // O telemóvel enviou a câmara, o PC tem de aceitar
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.send(JSON.stringify({ type: "answer", answer }));
+    } 
+    else if (data.type === "ice") {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
     }
-
-    video.onloadedmetadata = () => {
-        video.play();
-        console.log("Vídeo a funcionar!");
-    };
 };
-
-
-    socket.onmessage = async (message) => { 
-        const data = JSON.parse(message.data); 
-        if (data.type === "offer") { 
-            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await pc.createAnswer(); 
-            await pc.setLocalDescription(answer); 
-            socket.send(JSON.stringify({ type: "answer", answer })); 
-        } 
-        if (data.type === "ice") { 
-            await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); 
-        } 
-    };
-
 
     video.onplay = () => {
     console.log("Iniciando envio de frames...");
@@ -332,44 +332,68 @@ const captureCtx = captureCanvas.getContext("2d");
     };
     */
 
-    wsYOLO.onmessage = (event) => {
-        isWaitingForResponse = false; // Libera para enviar o próximo frame
+    let dataChannel; // Variável global
 
-        const detections = JSON.parse(event.data);
-        const video = document.getElementById("remoteVideo");
-        const rect = video.getBoundingClientRect();
-
-        // Cálculo dinâmico da escala baseado no tamanho REAL do vídeo recebido
-        const scaleX = rect.width / video.videoWidth;
-        const scaleY = rect.height / video.videoHeight;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
-        ctx.fillStyle = "red";
-        ctx.font = "18px Arial";
-
-        detections.forEach(det => {
-            const x = det.x * scaleX;
-            const y = det.y * scaleY;
-            const w = det.w * scaleX;
-            const h = det.h * scaleY;
-
-            ctx.strokeRect(x, y, w, h);
-            
-            if (det.name) {
-                ctx.fillText(det.name, x, y > 20 ? y - 5 : y + 20);
-            }
-        });
-
-        // Em vez de setInterval, chamamos o próximo frame com um pequeno delay de 50ms
-        setTimeout(sendFrame, 50); 
+    pc.ondatachannel = (event) => {
+        dataChannel = event.channel;
+        dataChannel.onopen = () => console.log("Canal de Dados aberto e pronto!");
+        dataChannel.onclose = () => console.log("Canal de Dados fechado.");
     };
+
+    pc.onicecandidate = event => {
+        if (event.candidate) {
+            socket.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+        }
+    };
+
+    wsYOLO.onmessage = (event) => {
+    isWaitingForResponse = false; 
+
+    // O event.data agora traz o objeto { detections: [], dispararAlerta: bool }
+    const resposta = JSON.parse(event.data);
+    const detections = resposta.detections;
+    const alertaConfirmado = resposta.dispararAlerta;
+
+    // 🔹 SÓ ENVIA O SINAL SE A COMPARAÇÃO DE FACE BATEU CERTO
+    if (alertaConfirmado === true) {
+        if (dataChannel && dataChannel.readyState === "open") {
+            console.log("✅ Face Confirmada! Enviando alerta...");
+            dataChannel.send("DETETADO");
+        }
+    }
+
+    // --- Lógica de desenho (continua igual, mas usando 'detections') ---
+    const video = document.getElementById("remoteVideo");
+    const rect = video.getBoundingClientRect();
+    const scaleX = rect.width / video.videoWidth;
+    const scaleY = rect.height / video.videoHeight;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = alertaConfirmado ? "green" : "red"; // Muda cor se reconhecido
+    ctx.lineWidth = 2;
+    ctx.fillStyle = alertaConfirmado ? "green" : "red";
+    ctx.font = "18px Arial";
+
+    detections.forEach(det => {
+        const x = det.x * scaleX;
+        const y = det.y * scaleY;
+        const w = det.w * scaleX;
+        const h = det.h * scaleY;
+
+        ctx.strokeRect(x, y, w, h);
+        if (det.name) {
+            ctx.fillText(det.name, x, y > 20 ? y - 5 : y + 20);
+        }
+    });
+
+    setTimeout(sendFrame, 50); 
+};
     /*
     video.addEventListener("loadeddata", () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
     });
+    
     */
     video.addEventListener("loadeddata", resizeCanvas);
     window.addEventListener("resize", resizeCanvas);
@@ -387,4 +411,3 @@ const captureCtx = captureCanvas.getContext("2d");
         canvas.style.width = rect.width + "px";
         canvas.style.height = rect.height + "px";
     }
-

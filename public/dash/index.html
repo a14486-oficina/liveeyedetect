@@ -1,283 +1,532 @@
-
 <!DOCTYPE html>
 <html lang="pt-pt">
 <head>
     <meta charset="UTF-8">
-    <title>Backoffice</title>
+    <title>Backoffice — Pessoas Desaparecidas</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0b0f1a;
+            --surface: #111827;
+            --surface2: #1a2235;
+            --border: rgba(255,255,255,0.07);
+            --border-hover: rgba(255,255,255,0.14);
+            --accent: #3b82f6;
+            --accent-dim: rgba(59,130,246,0.15);
+            --green: #22c55e;
+            --green-dim: rgba(34,197,94,0.12);
+            --red: #ef4444;
+            --red-dim: rgba(239,68,68,0.12);
+            --amber: #f59e0b;
+            --text: #f1f5f9;
+            --text-2: #94a3b8;
+            --text-3: #475569;
+            --radius: 10px;
+            --radius-sm: 6px;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
-            margin: 0;
-            padding: 20px;
-        }
-
-        /* Títulos */
-        h2 {
-            margin-top: 30px;
-            color: #38bdf8;
-        }
-
-        /* Inputs */
-        input {
-            padding: 10px;
-            margin: 5px 0;
-            border: none;
-            border-radius: 8px;
-            width: 250px;
-            background: #1e293b;
-            color: white;
-        }
-
-        /* Botões */
-        button {
-            padding: 10px 15px;
-            margin-top: 10px;
-            border: none;
-            border-radius: 8px;
-            background: #38bdf8;
-            color: black;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        button:hover {
-            background: #0ea5e9;
-        }
-
-        /* Lista */
-        ul {
-            list-style: none;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
             padding: 0;
         }
 
-        /* Card de pessoa */
-        li {
-            background: #1e293b;
-            margin-bottom: 10px;
-            padding: 15px;
-            border-radius: 10px;
+        /* ── Sidebar layout ── */
+        .layout { display: flex; min-height: 100vh; }
+
+        .sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            top: 0; left: 0;
+        }
+
+        .sidebar-logo {
+            padding: 0 20px 24px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        .sidebar-logo span {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-2);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .sidebar-logo strong {
+            display: block;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text);
+            margin-top: 2px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            font-size: 14px;
+            color: var(--text-2);
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            transition: all 0.15s;
+            margin: 1px 0;
+        }
+        .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+        .nav-item.active {
+            color: var(--accent);
+            background: var(--accent-dim);
+            border-left-color: var(--accent);
+        }
+        .nav-icon { font-size: 16px; width: 18px; text-align: center; }
+
+        .nav-badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 500;
+            background: var(--surface2);
+            color: var(--text-2);
+            padding: 2px 7px;
+            border-radius: 99px;
+            font-family: 'DM Mono', monospace;
+        }
+        .nav-item.active .nav-badge {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        /* ── Main ── */
+        .main {
+            margin-left: 220px;
+            flex: 1;
+            padding: 32px 36px;
+            max-width: 900px;
+        }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* ── Page header ── */
+        .page-header { margin-bottom: 28px; }
+        .page-header h1 { font-size: 22px; font-weight: 500; color: var(--text); }
+        .page-header p { font-size: 14px; color: var(--text-2); margin-top: 4px; }
+
+        /* ── Card ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        /* ── Form ── */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group.full { grid-column: 1 / -1; }
+
+        label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        input[type=text], input[type=number], select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            padding: 9px 12px;
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+        
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M2.5 4.5L6 8l3.5-3.5z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+        
+        input[type=text]:focus, input[type=number]:focus, select:focus {
+            border-color: var(--accent);
+        }
+        input[type=text]::placeholder, input[type=number]::placeholder {
+            color: var(--text-3);
+        }
+
+        input[type=file] {
+            background: var(--bg);
+            border: 1px dashed var(--border-hover);
+            border-radius: var(--radius-sm);
+            color: var(--text-2);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            padding: 10px 12px;
+            width: 100%;
+            cursor: pointer;
+        }
+        input[type=file]:hover { border-color: var(--accent); }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin: 20px 0 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* ── Location rows ── */
+        .loc-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 8px;
+            align-items: end;
+            margin-bottom: 8px;
+        }
+        .loc-row input { margin: 0; }
+
+        .btn-remove {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-3);
+            font-size: 13px;
+            padding: 9px 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+            line-height: 1;
+        }
+        .btn-remove:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+        .btn-add-loc {
+            background: none;
+            border: 1px dashed var(--border-hover);
+            border-radius: var(--radius-sm);
+            color: var(--text-2);
+            font-size: 13px;
+            padding: 8px 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-top: 4px;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .btn-add-loc:hover { border-color: var(--accent); color: var(--accent); }
+
+        .btn-primary {
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 10px 22px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: opacity 0.15s;
+        }
+        .btn-primary:hover { opacity: 0.85; }
+
+        /* ── Person rows ── */
+        .person-row {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            margin-bottom: 8px;
+            transition: border-color 0.15s;
+        }
+        .person-row:hover { border-color: var(--border-hover); }
+
+        .person-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
         }
 
-        /* Botão pequeno */
-        li button {
-            background: #22c55e;
-            color: white;
+        .person-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            flex: 1;
+            min-width: 0;
+        }
+        .person-name:hover { color: var(--accent); }
+
+        .chevron {
+            font-size: 9px;
+            color: var(--text-3);
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .chevron.open { transform: rotate(90deg); }
+
+        .badge-missing {
+            font-size: 10px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: rgba(245,158,11,0.12);
+            color: var(--amber);
+            flex-shrink: 0;
         }
 
-        li button:hover {
-            background: #16a34a;
+        .person-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+        .btn-action {
+            font-size: 12px;
+            font-family: 'DM Sans', sans-serif;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-found {
+            border: 1px solid rgba(34,197,94,0.3);
+            color: var(--green);
+            background: none;
+        }
+        .btn-found:hover { background: var(--green-dim); }
+        .btn-found:disabled { opacity: 0.4; cursor: default; }
+
+        .btn-loc {
+            border: 1px solid var(--border);
+            color: var(--text-2);
+            background: none;
+        }
+        .btn-loc:hover { border-color: var(--border-hover); color: var(--text); }
+
+        /* ── Details panel ── */
+        .person-details {
+            display: none;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .person-details.open { display: block; }
+
+        .detail-row {
+            display: flex;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-2);
+            margin-bottom: 6px;
+        }
+        .detail-key {
+            font-weight: 500;
+            color: var(--text-3);
+            min-width: 90px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding-top: 1px;
         }
 
-        /* Container */
-        .container {
-            max-width: 1200px;
-            margin: auto;
+        .loc-list {
+            margin-top: 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
         }
+        .loc-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .loc-item:last-child { border-bottom: none; }
+        .loc-coords { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+        .loc-time { color: var(--text-3); margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px; }
+        .loc-pin { color: var(--accent); font-size: 12px; }
 
-        /* Caixa criar pessoa */
-        .card {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
+        .loading-text { color: var(--text-3); font-size: 13px; }
+
+        /* ── Found rows ── */
+        .found-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--green-dim);
+            border: 1px solid rgba(34,197,94,0.2);
+            border-radius: var(--radius);
+            padding: 13px 18px;
+            margin-bottom: 8px;
         }
-        .detalhes {
-            transition: all 0.3s ease;
-            background: #0f172a;
-            padding: 10px;
-            border-radius: 8px;
+        .found-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            flex-shrink: 0;
         }
+        .found-name { font-size: 14px; font-weight: 500; color: var(--green); }
+
+        /* ── Empty state ── */
+        .empty {
+            text-align: center;
+            padding: 48px 16px;
+            color: var(--text-3);
+            font-size: 14px;
+        }
+        .empty-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.4; }
+
+        /* ── Stats row ── */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 18px;
+        }
+        .stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+        .stat-value { font-size: 26px; font-weight: 500; color: var(--text); margin-top: 4px; font-family: 'DM Mono', monospace; }
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.green { color: var(--green); }
+        .stat-value.amber { color: var(--amber); }
     </style>
 </head>
 <body>
-<div class="container">
 
-    <h2>Criar Pessoa</h2>
-    <div class="card">
-        <input id="nome" placeholder="Nome"><br>
-        <input id="idade" placeholder="Idade"><br>  
-        <h5>Inserir local de residência</h5> 
-        <input id="lat" placeholder="Latitude"><br>
-        <input id="lon" placeholder="Longitude"><br>
-        <h5>Ultimas localizações</h5>
+<div class="layout">
 
-        <div id="locContainer">
-            <div class="loc">
-                <input placeholder="Latitude">
-                <input placeholder="Longitude">
-                <input placeholder="Data">
-                <input placeholder="Hora"><br>
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span>Sistema</span>
+            <strong>Pessoas Desaparecidas</strong>
+        </div>
+        <div class="nav-item active" onclick="switchPanel('add')">
+            <span class="nav-icon">＋</span>
+            Adicionar
+        </div>
+        <div class="nav-item" onclick="switchPanel('missing')">
+            <span class="nav-icon">◎</span>
+            Desaparecidas
+            <span class="nav-badge" id="badge-missing">0</span>
+        </div>
+        <div class="nav-item" onclick="switchPanel('found')">
+            <span class="nav-icon">✓</span>
+            Encontradas
+            <span class="nav-badge" id="badge-found">0</span>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <div class="panel active" id="panel-add">
+            <div class="page-header">
+                <h1>Adicionar pessoa desaparecida</h1>
+                <p>Preenche os dados abaixo para criar um novo registo.</p>
+            </div>
+
+            <div class="card">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="nome" placeholder="Nome completo">
+                    </div>
+                    <div class="form-group">
+                        <label>Idade</label>
+                        <input type="number" id="idade" placeholder="ex: 34" min="0">
+                    </div>
+                    <div class="form-group full">
+                        <label>Sexo</label>
+                        <select id="sexo" onchange="toggleOutroSexo()">
+                            <option value="" disabled selected>Selecionar...</option>
+                            <option value="Masculino">Masculino</option>
+                            <option value="Feminino">Feminino</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="form-group full" id="outro-grupo" style="display: none;">
+                        <label>Especifique o sexo</label>
+                        <input type="text" id="sexo-outro-texto" placeholder="Especifique qual o outro sexo">
+                    </div>
+                    <div class="form-group">
+                        <label>Latitude de residência</label>
+                        <input type="text" id="lat" placeholder="ex: 38.7169">
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude de residência</label>
+                        <input type="text" id="lon" placeholder="ex: -9.1399">
+                    </div>
+                    <div class="form-group full">
+                        <label>Fotografia</label>
+                        <input type="file" id="imagem" accept="image/*">
+                    </div>
+                </div>
+
+                <p class="section-label">Últimas localizações conhecidas</p>
+                <div id="locContainer"></div>
+                <button class="btn-add-loc" onclick="adicionarLocalizacao()">+ Adicionar localização</button>
+                <br>
+                <button class="btn-primary" onclick="criarPessoa()">Criar registo</button>
             </div>
         </div>
 
-        <button onclick="adicionarLocalizacao()">Adicionar localização</button><br>
-        <input type="file" id="imagem"><br>
-        <button onclick="criarPessoa()">Criar</button>
-    </div>
-
-    <h2>Pessoas</h2>
-    <ul id="lista"></ul>
-
-</div>
-
-<script>
-function adicionarLocalizacao() {
-    let container = document.getElementById("locContainer");
-
-    let nova = document.createElement("div");
-    nova.classList.add("loc");
-    // Adicionei uma margem inferior para separar as linhas visualmente
-    nova.style.marginBottom = "10px"; 
-
-    nova.innerHTML = `
-        <input placeholder="Latitude">
-        <input placeholder="Longitude">
-        <input placeholder="Data">
-        <input placeholder="Hora">
-        <button type="button" onclick="this.parentElement.remove()" 
-                style="background: #ef4444; margin-left: 5px; padding: 5px 10px;">
-            ✕
-        </button>
-    `;
-
-    container.appendChild(nova);
-}
-
-
-let aberta = null
-
-async function togglePessoa(id, element) {
-    let li = element.parentElement
-    let detalheDiv = li.querySelector(".detalhes")
-
-    if (detalheDiv.dataset.loaded !== "true") {
-        let res = await fetch(`http://127.0.0.1:8000/pessoas/${id}`)
-        let p = await res.json()
-
-        detalheDiv.innerHTML = `
-            <p><b>ID:</b> ${p.id}</p>
-            <p><b>Nome:</b> ${p.nome}</p>
-            <p><b>Idade:</b> ${p.idade}</p>
-
-            <b>Localização:</b>
-            <p>
-                Lat: ${p.local_de_residencia?.lat ?? "N/A"} |
-                Lon: ${p.local_de_residencia?.lon ?? "N/A"}
-            </p>
-
-            <b>Histórico:</b>
-            <ul>
-                ${(p.localizacoes || []).map(loc => `
-                    <li>${loc.lat} | ${loc.lon}</li>
-                `).join("")}
-            </ul>
-        `
-
-        detalheDiv.dataset.loaded = "true"
-    }
-
-    detalheDiv.style.display =
-        detalheDiv.style.display === "block" ? "none" : "block"
-}
-
-async function criarPessoa() {
-    let formData = new FormData()
-    let fileInput = document.getElementById("imagem")
-
-    let nome = document.getElementById("nome").value
-    let idade = parseInt(document.getElementById("idade").value)
-    let lat = parseFloat(document.getElementById("lat").value)
-    let lon = parseFloat(document.getElementById("lon").value)
-    // 🔴 validações (super importante)
-    if (!nome) {
-        alert("Nome é obrigatório")
-        return
-    }
-
-    if (isNaN(idade)) {
-        alert("Idade inválida")
-        return
-    }
-
-    if (isNaN(lat) || isNaN(lon)) {
-        alert("Latitude/Longitude inválidas")
-        return
-    }
-
-    if (!fileInput.files[0]) {
-        alert("Seleciona uma imagem")
-        return
-    }
-
-    //enviar tudo corretamente
-    formData.append("nome", nome)
-    formData.append("idade", idade)
-    formData.append("lat", lat)
-    formData.append("lon", lon)
-    formData.append("imagem", fileInput.files[0])
-
-    // verificacao
-    for (let pair of formData.entries()) {
-    console.log(pair[0], pair[1])
-    }
-
-    let res = await fetch("http://127.0.0.1:8000/pessoas_criar", {
-        method: "POST",
-        body: formData
-    })
-
-    if (!res.ok) {
-        alert("Erro ao criar pessoa")
-        return
-    }
-
-    carregarPessoas()
-}
-
-async function carregarPessoas() {
-    let res = await fetch("http://127.0.0.1:8000/pessoas_listar")
-    let data = await res.json()
-
-    let lista = document.getElementById("lista")
-    lista.innerHTML = ""
-
-    data.forEach(p => {
-        let li = document.createElement("li")
-        li.innerHTML = `
-            <div onclick="togglePessoa('${p.id}', this)" style="cursor:pointer; width:100%">
-                <strong>${p.nome}</strong>
+        <div class="panel" id="panel-missing">
+            <div class="page-header">
+                <h1>Pessoas desaparecidas</h1>
+                <p>Clica num registo para ver os detalhes.</p>
             </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-label">Desaparecidas</div>
+                    <div class="stat-value amber" id="stat-missing">0</div>
+                </div>
+            </div>
+            <div id="lista"></div>
+        </div>
 
-            <button onclick="event.stopPropagation(); addLoc('${p.id}')">
-                + Localização
-            </button>
+        <div class="panel" id="panel-found">
+            <div class="page-header">
+                <h1>Pessoas encontradas</h1>
+                <p>Registos de pessoas que já foram localizadas.</p>
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-label">Encontradas</div>
+                    <div class="stat-value green" id="stat-found">0</div>
+                </div>
+            </div>
+            <div id="listaEnc"></div>
+        </div>
 
-            <div class="detalhes" style="display:none; margin-top:10px;"></div>
-        `
-        lista.appendChild(li)
-    })
-}
-
-async function addLoc(id) {
-    let lat = prompt("Latitude:")
-    let lon = prompt("Longitude:")
-
-    await fetch(`http://127.0.0.1:8000/pessoas/${id}/localizacao?lat=${lat}&lon=${lon}`, {
-        method: "POST"
-    })
-
-    alert("Localização adicionada!")
-}
-
-carregarPessoas()
-</script>
-
+    </main>
+</div>
+    <script src="dashboard.js"></script>
 </body>
 </html>

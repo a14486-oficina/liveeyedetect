@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Login — Pessoas Desaparecidas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+        :root {
+            --bg: #0b0f1a;
+            --surface: #111827;
+            --surface2: #1a2235;
+            --border: rgba(255,255,255,0.07);
+            --border-hover: rgba(255,255,255,0.14);
+            --accent: #3b82f6;
+            --accent-dim: rgba(59,130,246,0.15);
+            --green: #22c55e;
+            --red: #ef4444;
+            --red-dim: rgba(239,68,68,0.12);
+            --text: #f1f5f9;
+            --text-2: #94a3b8;
+            --text-3: #475569;
+            --radius: 10px;
+            --radius-sm: 6px;
+        }
+ 
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+ 
+        /* ── Background grid ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+ 
+        /* ── Glow ── */
+        body::after {
+            content: '';
+            position: fixed;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(59,130,246,0.07) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+ 
+        /* ── Card ── */
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 380px;
+            animation: fadeUp 0.4s ease both;
+        }
+ 
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+ 
+        /* ── Logo ── */
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+ 
+        .logo-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(59,130,246,0.25);
+            border-radius: 10px;
+            font-size: 20px;
+            margin-bottom: 14px;
+        }
+ 
+        .logo span {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-3);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+ 
+        .logo strong {
+            display: block;
+            font-size: 17px;
+            font-weight: 500;
+            color: var(--text);
+        }
+ 
+        /* ── Card box ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 28px 24px;
+        }
+ 
+        .card-header {
+            margin-bottom: 22px;
+        }
+ 
+        .card-header h1 {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text);
+        }
+ 
+        .card-header p {
+            font-size: 13px;
+            color: var(--text-3);
+            margin-top: 3px;
+        }
+ 
+        /* ── Form ── */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+ 
+        label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+ 
+        .input-wrap {
+            position: relative;
+        }
+ 
+        input[type=text],
+        input[type=password] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            padding: 10px 38px 10px 12px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+ 
+        input[type=text]:focus,
+        input[type=password]:focus {
+            border-color: var(--accent);
+        }
+ 
+        input::placeholder { color: var(--text-3); }
+ 
+        .input-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: var(--text-3);
+            pointer-events: none;
+        }
+ 
+        .toggle-pw {
+            pointer-events: all;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .toggle-pw:hover { color: var(--text-2); }
+ 
+        /* ── Erro ── */
+        .error-msg {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: var(--red-dim);
+            border: 1px solid rgba(239,68,68,0.2);
+            border-radius: var(--radius-sm);
+            color: var(--red);
+            font-size: 13px;
+            padding: 9px 12px;
+            margin-bottom: 14px;
+        }
+        .error-msg.visible { display: flex; }
+ 
+        /* ── Botão ── */
+        .btn-primary {
+            width: 100%;
+            background: var(--accent);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 11px;
+            cursor: pointer;
+            margin-top: 6px;
+            transition: opacity 0.15s, transform 0.1s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary:hover { opacity: 0.88; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled { opacity: 0.5; cursor: default; }
+ 
+        .btn-primary .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin: 0 auto;
+        }
+        .btn-primary.loading .btn-text { display: none; }
+        .btn-primary.loading .spinner { display: block; }
+ 
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+ 
+        /* ── Rodapé do card ── */
+        .card-footer {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-3);
+            font-family: 'DM Mono', monospace;
+        }
+ 
+        /* ── Success overlay ── */
+        .success-overlay {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 24px 0 8px;
+        }
+        .success-overlay.visible { display: flex; }
+        .success-icon {
+            font-size: 28px;
+            color: var(--green);
+        }
+        .success-overlay p {
+            font-size: 14px;
+            color: var(--text-2);
+        }
+    </style>
+</head>
+<body>
+ 
+<div class="login-wrapper">
+ 
+    <div class="logo">
+        <div class="logo-icon">◎</div>
+        <span>Sistema</span>
+        <strong>Pessoas Desaparecidas</strong>
+    </div>
+ 
+    <div class="card">
+        <div id="form-area">
+            <div class="card-header">
+                <h1>Iniciar sessão</h1>
+                <p>Acesso restrito a pessoal autorizado.</p>
+            </div>
+ 
+            <div id="error-box" class="error-msg">
+                <span>⚠</span>
+                <span id="error-text">Credenciais inválidas.</span>
+            </div>
+ 
+            <div class="form-group">
+                <label>Utilizador</label>
+                <div class="input-wrap">
+                    <input type="text" id="username" placeholder="ex: admin" autocomplete="username">
+                    <span class="input-icon">◈</span>
+                </div>
+            </div>
+ 
+            <div class="form-group">
+                <label>Palavra-passe</label>
+                <div class="input-wrap">
+                    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+                    <span class="input-icon toggle-pw" onclick="togglePassword(this)" title="Mostrar/ocultar">◉</span>
+                </div>
+            </div>
+ 
+            <button class="btn-primary" id="btn-login" onclick="fazerLogin()">
+                <span class="btn-text">Entrar</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+ 
+        <div class="success-overlay" id="success-area">
+            <div class="success-icon">✓</div>
+            <p>Autenticado. A redirecionar...</p>
+        </div>
+ 
+        <div class="card-footer">
+            Acesso interno · Sistema PAP
+        </div>
+    </div>
+</div>
+
+    <script src="longin.js"></script>
+
+</body>
+</html>

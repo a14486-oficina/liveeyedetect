@@ -71,7 +71,10 @@ app.add_middleware(
     allow_origins=[
         "https://freya-ethylic-nicolas.ngrok-free.dev",
         "http://127.0.0.1:8000",
-        "http://localhost:8000"
+        "http://localhost:8000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://10.170.130.134:5173",  # ← adiciona esta linha
     ],
     allow_credentials=True,
     allow_methods=["*"],

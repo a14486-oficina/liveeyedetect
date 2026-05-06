@@ -42,8 +42,9 @@ const Receiver = () => {
     const captureCtx = capture.getContext("2d");
 
     // Signal WebSocket
+    // CORRETO - liga ao Node na porta 3000
     const wsSignal = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+    (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-signal"
     );
     wsSignalRef.current = wsSignal;
 

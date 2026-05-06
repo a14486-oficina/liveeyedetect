@@ -131,7 +131,26 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
               A carregar...
             </p>
           ) : details ? (
-            <>
+            <> 
+              {/* ── Fotografia ── */}
+              {details.imagem_b64 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <span style={{ ...s.label, display: "block", marginBottom: "8px" }}>Fotografia</span>
+                  <img
+                    src={`data:image/jpeg;base64,${details.imagem_b64}`}
+                    alt={details.nome}
+                    style={{
+                      width: "100%",
+                      maxHeight: "260px",
+                      objectFit: "cover",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      display: "block",
+                    }}
+                  />
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
                 {[
                   ["Idade", `${details.idade} anos`],
@@ -146,6 +165,19 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
                   </div>
                 ))}
               </div>
+
+              {/* ── Observações ── */}
+              {details.observacoes && (
+                <div style={{
+                  background: "rgba(255,255,255,0.03)", borderRadius: "8px", padding: "12px 14px",
+                  marginBottom: "16px", border: "1px solid rgba(255,255,255,0.05)",
+                }}>
+                  <span style={{ ...s.label, display: "block", marginBottom: "6px" }}>Observações</span>
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "13px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: "1.5" }}>
+                    {details.observacoes}
+                  </p>
+                </div>
+              )}
  
               <p style={{ ...s.label, marginBottom: "10px" }}>Histórico de localizações</p>
               {details.localizacoes?.length > 0 ? (
@@ -191,7 +223,7 @@ const Desaparecidas = ({ onCountChange }) => {
       const res = await fetch(`${API}/pessoas_listar`);
       const data = await res.json();
       setPessoas(data);
-      onCountChange(data.length);
+      if (typeof onCountChange === "function") onCountChange(data.length);
     } catch { /* silent */ }
     setLoading(false);
   };
@@ -201,7 +233,7 @@ const Desaparecidas = ({ onCountChange }) => {
   const handleFound = (id) => {
     setPessoas((p) => {
       const updated = p.filter((x) => x.id !== id);
-      onCountChange(updated.length);
+      if (typeof onCountChange === "function") onCountChange(updated.length);
       return updated;
     });
   };

@@ -42,6 +42,94 @@ async def websocket_endpoint(ws: WebSocket):
 
 */
 """
+"""
+from ultralytics import YOLO
+import cv2
+import base64
+import numpy as np
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+model = YOLO("yolo26n.pt")
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+
+    while True:
+        data = await ws.receive_text()
+
+        # converter base64 → imagem
+        img_bytes = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        results = model(frame)[0]
+
+        detections = []
+
+        for box in results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+
+            detections.append({
+                "x": x1,
+                "y": y1,
+                "w": x2 - x1,
+                "h": y2 - y1,
+                "conf": conf,
+                "cls": cls
+            })
+
+        await ws.send_json(detections)
+
+*/
+"""
+"""
+from ultralytics import YOLO
+import cv2
+import base64
+import numpy as np
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+model = YOLO("yolo26n.pt")
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+
+    while True:
+        data = await ws.receive_text()
+
+        # converter base64 → imagem
+        img_bytes = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        results = model(frame)[0]
+
+        detections = []
+
+        for box in results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+
+            detections.append({
+                "x": x1,
+                "y": y1,
+                "w": x2 - x1,
+                "h": y2 - y1,
+                "conf": conf,
+                "cls": cls
+            })
+
+        await ws.send_json(detections)
+
+*/
+"""
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
@@ -49,23 +137,25 @@ from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 from ultralytics import YOLO
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from decimal import Decimal
 import cv2
 import base64
 import numpy as np
 import face_recognition
 import datetime
 import os
- 
+import json
+
 load_dotenv()
- 
+
 qdrant = QdrantClient(
     url=os.getenv("QDRANT_URL"),
     api_key=os.getenv("QDRANT_API_KEY"),
 )
- 
+
 app = FastAPI()
-model = YOLO("yolo26n.pt")
- 
+model = YOLO("yolo26n.pt") 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -74,52 +164,65 @@ app.add_middleware(
         "http://localhost:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "http://10.170.130.134:5173",  # ← adiciona esta linha
+        "http://10.170.130.134:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
- 
+
 # ── Utilitários ──────────────────────────────────────────────────────────────
- 
+
 def get_next_id():
     result = qdrant.scroll(collection_name="pessoas", limit=100)[0]
     if not result:
         return 1
     ids = [int(p.id) for p in result if str(p.id).isdigit()]
     return max(ids) + 1 if ids else 1
- 
+
 # ── Endpoints REST ───────────────────────────────────────────────────────────
- 
+
 @app.post("/pessoas_criar")
 async def criar_pessoa(
     nome: str = Form(...),
     idade: int = Form(...),
     sexo: str = Form(...),
-    lat: float = Form(...),
-    lon: float = Form(...),
+    lat: Decimal = Form(...),
+    lon: Decimal = Form(...),
     historico: str = Form("[]"),
+    observacoes: str = Form(""),
     imagem: UploadFile = File(...),
 ):
     contents = await imagem.read()
     np_arr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
- 
+
     encodings = face_recognition.face_encodings(rgb)
     if not encodings:
         return {"erro": "Nenhum rosto detetado na imagem"}
- 
+
     embedding = encodings[0].tolist()
     person_id = get_next_id()
- 
-    import json
+
+    # ── Guardar imagem redimensionada em base64 no payload ──────────────────
+    # Redimensiona para max 400px de largura para não sobrecarregar o Qdrant
+    h, w = img.shape[:2]
+    if w > 400:
+        scale = 400 / w
+        img_resized = cv2.resize(img, (400, int(h * scale)))
+    else:
+        img_resized = img
+
+    _, buffer = cv2.imencode(".jpg", img_resized, [cv2.IMWRITE_JPEG_QUALITY, 75])
+    imagem_b64 = base64.b64encode(buffer).decode("utf-8")
+    # ────────────────────────────────────────────────────────────────────────
+
     try:
         localizacoes_iniciais = json.loads(historico)
     except Exception:
         localizacoes_iniciais = []
- 
+
     qdrant.upsert(
         collection_name="pessoas",
         points=[
@@ -133,14 +236,16 @@ async def criar_pessoa(
                     "local_de_residencia": {"lat": lat, "lon": lon},
                     "ultimas_localizacoes": localizacoes_iniciais,
                     "Desaparecida": True,
+                    "imagem_b64": imagem_b64,
+                    "Observacoes": observacoes,
                 }
             )
         ]
     )
- 
+
     return {"status": "ok", "id": person_id}
- 
- 
+
+
 @app.get("/pessoas_listar")
 def listar_pessoas():
     try:
@@ -163,10 +268,10 @@ def listar_pessoas():
             for p in result[0] or []
         ]
     except Exception as e:
-        print("ERRO listar_pessoas:", e)
+        print(f"ERRO listar_pessoas: {e}")
         return []
- 
- 
+
+
 @app.get("/pessoas_listar_encontradas")
 def listar_pessoas_encontradas():
     try:
@@ -183,10 +288,10 @@ def listar_pessoas_encontradas():
             for p in result[0] or []
         ]
     except Exception as e:
-        print("ERRO listar_encontradas:", e)
+        print(f"ERRO listar_encontradas: {e}")
         return []
- 
- 
+
+
 @app.get("/pessoas/{person_id}")
 def get_pessoa(person_id: int):
     res = qdrant.retrieve(collection_name="pessoas", ids=[person_id], with_payload=True)
@@ -200,32 +305,34 @@ def get_pessoa(person_id: int):
         "sexo": p.payload.get("sexo"),
         "local_de_residencia": p.payload.get("local_de_residencia"),
         "localizacoes": p.payload.get("ultimas_localizacoes", []),
+        "imagem_b64": p.payload.get("imagem_b64"),
+        "observacoes": p.payload.get("Observacoes", ""),
     }
- 
- 
+
+
 @app.post("/pessoas/{person_id}/localizacao")
-def adicionar_localizacao(person_id: int, lat: float, lon: float, data: str = "", hora: str = ""):
+def adicionar_localizacao(person_id: int, lat: Decimal, lon: Decimal, data: str = "", hora: str = ""):
     res = qdrant.retrieve(collection_name="pessoas", ids=[person_id], with_payload=True)
     if not res:
         return {"erro": "Pessoa não encontrada"}
- 
+
     localizacoes = res[0].payload.get("ultimas_localizacoes", [])
     localizacoes.append({
         "lat": lat,
         "lon": lon,
         "data": data,
         "hora": hora,
-        "timestamp": datetime.datetime.now().isoformat(),  # CORRIGIDO: datetime.datetime
+        "timestamp": datetime.datetime.now().isoformat(),
     })
- 
+
     qdrant.set_payload(
         collection_name="pessoas",
         payload={"ultimas_localizacoes": localizacoes},
         points=[person_id],
     )
     return {"status": "ok"}
- 
- 
+
+
 @app.post("/pessoas/{pessoa_id}/estado")
 def atualizar_estado(pessoa_id: int):
     qdrant.set_payload(
@@ -234,66 +341,70 @@ def atualizar_estado(pessoa_id: int):
         points=[pessoa_id],
     )
     return {"ok": True}
- 
- 
+
+
 # ── WebSocket ────────────────────────────────────────────────────────────────
- 
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    print("Cliente conectado!")
- 
+    print("Cliente conectado via WebSocket")
+
     try:
         while True:
             data = await ws.receive_text()
-            img_bytes = base64.b64decode(data.split(",")[1])
+            header, encoded = data.split(",", 1)
+            img_bytes = base64.b64decode(encoded)
             np_arr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
- 
+
             if frame is None:
                 continue
- 
+
             yolo_results = model(frame)[0]
             detections = []
             alerta_confirmado = False
- 
+
             for box in yolo_results.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
                 cls = int(box.cls[0])
                 name = None
- 
+
                 if cls == 0:
                     person_img = frame[y1:y2, x1:x2]
                     if person_img.size > 0:
                         rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
                         face_locations = face_recognition.face_locations(rgb, model="hog")
                         encodings = face_recognition.face_encodings(rgb, face_locations)
- 
+
                         for encoding in encodings:
                             search_result = qdrant.query_points(
                                 collection_name="pessoas",
-                                query=encoding,
+                                query=encoding.tolist(),
+                                query_filter=Filter(
+                                    must=[FieldCondition(key="Desaparecida", match=MatchValue(value=True))]
+                                ),
                                 limit=1,
                             )
                             if search_result.points and search_result.points[0].score > 0.6:
                                 name = search_result.points[0].payload.get("nome")
                                 alerta_confirmado = True
                                 break
- 
+
                 detections.append({
                     "x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1,
                     "conf": conf, "cls": cls, "name": name,
                 })
- 
+
             await ws.send_json({
                 "detections": detections,
                 "dispararAlerta": alerta_confirmado,
             })
- 
+
     except WebSocketDisconnect:
-        print("O cliente desconectou de forma esperada.")
+        print("Cliente desconectado.")
     except Exception as e:
-        print(f"Erro inesperado: {e}")
+        print(f"Erro inesperado no WebSocket: {e}")
     finally:
-        print("Conexão limpa.")
+        print("Limpeza de conexão concluída.")

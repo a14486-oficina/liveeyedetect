@@ -75,7 +75,7 @@ const Sidebar = ({ active, onNavigate, counts }) => {
         <span style={{
           fontSize: "10px", color: "rgba(255,255,255,0.2)",
           fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em",
-        }}>v1.0.0 · PAP 2025</span>
+        }}>v1.0.0</span>
       </div>
     </aside>
   );

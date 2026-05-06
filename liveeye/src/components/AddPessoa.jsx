@@ -22,7 +22,9 @@ const s = {
 };
  
 const AddPessoa = ({ onSuccess }) => {
-  const [form, setForm] = useState({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "" });
+  const [form, setForm] = useState({
+    nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "",
+  });
   const [imagem, setImagem] = useState(null);
   const [locs, setLocs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -61,13 +63,14 @@ const AddPessoa = ({ onSuccess }) => {
       fd.append("sexo", sexo);
       fd.append("lat", parseFloat(form.lat));
       fd.append("lon", parseFloat(form.lon));
+      fd.append("observacoes", form.obs.trim());
       fd.append("imagem", imagem);
       fd.append("historico", JSON.stringify(locs.filter(l => l.lat && l.lon).map(l => ({
         lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
       }))));
       const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
       if (!res.ok) throw new Error("Erro ao criar");
-      setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "" });
+      setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "" });
       setImagem(null); setLocs([]);
       onSuccess();
     } catch (e) {
@@ -90,7 +93,6 @@ const AddPessoa = ({ onSuccess }) => {
       </div>
  
       <div style={s.card}>
-        {/* Grid 2 cols */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
           <div style={s.group}>
             <label style={s.label}>Nome completo</label>
@@ -134,6 +136,17 @@ const AddPessoa = ({ onSuccess }) => {
             <input type="file" accept="image/*" onChange={(e) => setImagem(e.target.files[0])}
               style={{ ...s.input, cursor: "pointer", color: "rgba(255,255,255,0.4)" }} />
           </div>
+          <div style={{ ...s.group, gridColumn: "1 / -1" }}>
+            <label style={s.label}>Observações</label>
+            <input
+              style={s.input}
+              value={form.obs}
+              onChange={set("obs")}
+              placeholder="Indique dados extra sobre a pessoa..."
+              onFocus={inputFocus}
+              onBlur={inputBlur}
+            />
+          </div>
         </div>
  
         {/* Localizações */}
@@ -152,7 +165,7 @@ const AddPessoa = ({ onSuccess }) => {
               <button onClick={() => removeLoc(i)} style={{
                 background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.2)",
                 borderRadius: "8px", color: "#e63946", padding: "10px 12px", cursor: "pointer",
-                fontSize: "13px", marginBottom: "0",
+                fontSize: "13px",
               }}>✕</button>
             </div>
           ))}

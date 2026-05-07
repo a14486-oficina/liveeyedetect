@@ -4,20 +4,21 @@ const API = "http://127.0.0.1:8000";
 
 const s = {
   label: {
-    fontSize: "10px", fontWeight: 600, color: "rgba(255,255,255,0.3)",
-    textTransform: "uppercase", letterSpacing: "0.1em",
-    fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px", display: "block",
+    fontSize: "11px", fontWeight: 500, color: "var(--text-muted)",
+    textTransform: "uppercase", letterSpacing: "0.08em",
+    fontFamily: "var(--font-mono)", marginBottom: "6px", display: "block",
   },
   input: {
-    width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "8px", color: "#f0eee8", fontFamily: "'Syne', sans-serif",
-    fontSize: "13px", padding: "10px 14px", outline: "none", boxSizing: "border-box",
+    width: "100%", background: "var(--bg-surface)", border: "1px solid var(--border)",
+    borderRadius: "7px", color: "var(--text-primary)", fontFamily: "var(--font-sans)",
+    fontSize: "13px", padding: "9px 13px", outline: "none", boxSizing: "border-box",
     transition: "border-color 0.15s",
   },
   group: { display: "flex", flexDirection: "column" },
   card: {
-    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: "12px", padding: "24px",
+    background: "var(--bg-surface)", border: "1px solid var(--border)",
+    borderRadius: "12px", padding: "28px",
+    boxShadow: "var(--shadow-sm)",
   },
 };
 
@@ -32,58 +33,43 @@ const PhotoSlot = ({ label, file, onChange }) => {
         onClick={() => inputRef.current.click()}
         style={{
           width: "100%", aspectRatio: "1 / 1",
-          background: preview ? "transparent" : "rgba(255,255,255,0.02)",
-          border: preview ? "1px solid rgba(230,57,70,0.35)" : "1.5px dashed rgba(255,255,255,0.12)",
-          borderRadius: "10px", cursor: "pointer",
+          background: preview ? "transparent" : "var(--bg-raised)",
+          border: preview ? "1px solid var(--accent-border)" : "1.5px dashed var(--border-strong)",
+          borderRadius: "9px", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          overflow: "hidden", position: "relative",
-          transition: "border-color 0.2s",
+          overflow: "hidden", position: "relative", transition: "border-color 0.2s",
         }}
       >
         {preview ? (
           <>
-            <img
-              src={preview}
-              alt={label}
-              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "9px" }}
-            />
-            {/* overlay on hover */}
+            <img src={preview} alt={label}
+              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)",
+              position: "absolute", inset: 0, background: "rgba(26,25,22,0.35)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: 0, transition: "opacity 0.2s",
-              borderRadius: "9px", fontSize: "11px", color: "#f0eee8",
-              fontFamily: "'JetBrains Mono', monospace",
+              opacity: 0, transition: "opacity 0.2s", borderRadius: "8px",
+              fontSize: "11px", color: "#fff", fontFamily: "var(--font-mono)",
             }}
               onMouseEnter={e => e.currentTarget.style.opacity = 1}
               onMouseLeave={e => e.currentTarget.style.opacity = 0}
-            >
-              Alterar
-            </div>
+            >Alterar</div>
           </>
         ) : (
-          <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)" }}>
-            <div style={{ fontSize: "24px", marginBottom: "6px" }}>+</div>
-            <div style={{ fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
-              Clica para adicionar
-            </div>
+          <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
+            <div style={{ fontSize: "22px", marginBottom: "6px" }}>+</div>
+            <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}>Clica para adicionar</div>
           </div>
         )}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => onChange(e.target.files[0] || null)}
-      />
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={(e) => onChange(e.target.files[0] || null)} />
       {file && (
         <button
           onClick={(e) => { e.stopPropagation(); onChange(null); inputRef.current.value = ""; }}
           style={{
-            background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.2)",
-            borderRadius: "6px", color: "#e63946", fontSize: "11px",
-            padding: "4px 8px", cursor: "pointer", fontFamily: "'Syne', sans-serif",
+            background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+            borderRadius: "5px", color: "var(--accent)", fontSize: "11px",
+            padding: "4px 8px", cursor: "pointer", fontFamily: "var(--font-sans)",
             alignSelf: "flex-start",
           }}
         >✕ Remover</button>
@@ -102,13 +88,7 @@ const AddPessoa = ({ onSuccess }) => {
   const [error, setError] = useState("");
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const setFoto = (i) => (file) => setFotos((prev) => {
-    const next = [...prev];
-    next[i] = file;
-    return next;
-  });
-
+  const setFoto = (i) => (file) => setFotos((prev) => { const next = [...prev]; next[i] = file; return next; });
   const addLoc = () => setLocs((l) => [...l, { lat: "", lon: "", data: "", hora: "" }]);
   const removeLoc = (i) => setLocs((l) => l.filter((_, idx) => idx !== i));
   const setLoc = (i, k) => (e) => setLocs((l) => l.map((loc, idx) => idx === i ? { ...loc, [k]: e.target.value } : loc));
@@ -141,23 +121,17 @@ const AddPessoa = ({ onSuccess }) => {
       fd.append("lat", parseFloat(form.lat));
       fd.append("lon", parseFloat(form.lon));
       fd.append("observacoes", form.obs.trim());
-
-      // imagem1 obrigatória, imagem2 e imagem3 opcionais
       fd.append("imagem1", fotos[0]);
       if (fotos[1]) fd.append("imagem2", fotos[1]);
       if (fotos[2]) fd.append("imagem3", fotos[2]);
-
       fd.append("historico", JSON.stringify(
         locs.filter(l => l.lat && l.lon).map(l => ({
           lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
         }))
       ));
-
       const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok || json.erro) throw new Error(json.erro || "Erro ao criar");
-
-      // Reset
       setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "" });
       setFotos([null, null, null]);
       setLocs([]);
@@ -167,16 +141,16 @@ const AddPessoa = ({ onSuccess }) => {
     } finally { setLoading(false); }
   };
 
-  const inputFocus = (e) => e.target.style.borderColor = "rgba(230,57,70,0.6)";
-  const inputBlur = (e) => e.target.style.borderColor = "rgba(255,255,255,0.08)";
+  const inputFocus = (e) => e.target.style.borderColor = "var(--accent)";
+  const inputBlur  = (e) => e.target.style.borderColor = "var(--border)";
 
   return (
     <div>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "22px", fontWeight: 700, color: "#f0eee8", margin: 0 }}>
+      <div style={{ marginBottom: "32px" }}>
+        <h1 style={{ fontSize: "22px", fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
           Adicionar Pessoa
         </h1>
-        <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", marginTop: "4px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px", fontFamily: "var(--font-mono)" }}>
           Preenche os dados para criar um novo registo
         </p>
       </div>
@@ -230,21 +204,22 @@ const AddPessoa = ({ onSuccess }) => {
         </div>
 
         {/* Fotografias */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "20px", marginTop: "4px" }}>
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "22px", marginTop: "4px" }}>
           <p style={{ ...s.label, marginBottom: "14px" }}>
-            Fotografias <span style={{ color: "rgba(255,255,255,0.18)", fontWeight: 400 }}>
-              — 1 obrigatória, até 3 (ângulos diferentes melhoram o reconhecimento)
+            Fotografias{" "}
+            <span style={{ color: "var(--text-muted)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              — 1 obrigatória, até 3
             </span>
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
             <PhotoSlot label="Foto 1 (obrigatória)" file={fotos[0]} onChange={setFoto(0)} />
-            <PhotoSlot label="Foto 2 (opcional)" file={fotos[1]} onChange={setFoto(1)} />
-            <PhotoSlot label="Foto 3 (opcional)" file={fotos[2]} onChange={setFoto(2)} />
+            <PhotoSlot label="Foto 2 (opcional)"   file={fotos[1]} onChange={setFoto(1)} />
+            <PhotoSlot label="Foto 3 (opcional)"   file={fotos[2]} onChange={setFoto(2)} />
           </div>
         </div>
 
         {/* Localizações */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "20px", marginTop: "20px" }}>
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "22px", marginTop: "22px" }}>
           <p style={{ ...s.label, marginBottom: "12px" }}>Últimas localizações conhecidas</p>
           {locs.map((loc, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
@@ -257,34 +232,34 @@ const AddPessoa = ({ onSuccess }) => {
                 </div>
               ))}
               <button onClick={() => removeLoc(i)} style={{
-                background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.2)",
-                borderRadius: "8px", color: "#e63946", padding: "10px 12px", cursor: "pointer",
+                background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+                borderRadius: "7px", color: "var(--accent)", padding: "9px 12px", cursor: "pointer",
                 fontSize: "13px",
               }}>✕</button>
             </div>
           ))}
           <button onClick={addLoc} style={{
-            background: "none", border: "1px dashed rgba(255,255,255,0.15)",
-            borderRadius: "8px", color: "rgba(255,255,255,0.4)", fontSize: "13px",
-            padding: "8px 16px", cursor: "pointer", fontFamily: "'Syne', sans-serif",
-            transition: "all 0.15s", marginTop: "4px",
+            background: "none", border: "1px dashed var(--border-strong)",
+            borderRadius: "7px", color: "var(--text-muted)", fontSize: "13px",
+            padding: "8px 16px", cursor: "pointer", fontFamily: "var(--font-sans)",
+            transition: "all 0.12s", marginTop: "4px",
           }}>+ Adicionar localização</button>
         </div>
 
         {error && (
           <div style={{
-            marginTop: "16px", background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.25)",
-            borderRadius: "8px", padding: "10px 14px", color: "#e63946", fontSize: "13px",
-            fontFamily: "'JetBrains Mono', monospace",
+            marginTop: "16px", background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+            borderRadius: "7px", padding: "10px 14px", color: "var(--accent)", fontSize: "13px",
+            fontFamily: "var(--font-mono)",
           }}>⚠ {error}</div>
         )}
 
         <button onClick={submit} disabled={loading} style={{
-          marginTop: "20px", background: loading ? "rgba(230,57,70,0.5)" : "#e63946",
-          border: "none", borderRadius: "8px", color: "#fff", padding: "12px 28px",
-          fontSize: "14px", fontWeight: 600, fontFamily: "'Syne', sans-serif",
-          cursor: loading ? "not-allowed" : "pointer", transition: "all 0.15s",
-          boxShadow: loading ? "none" : "0 0 20px rgba(230,57,70,0.3)",
+          marginTop: "22px", background: loading ? "var(--accent-mid)" : "var(--accent)",
+          border: "none", borderRadius: "7px", color: "#fff", padding: "11px 26px",
+          fontSize: "13px", fontWeight: 500, fontFamily: "var(--font-sans)",
+          cursor: loading ? "not-allowed" : "pointer", transition: "all 0.12s",
+          letterSpacing: "0.01em",
         }}>
           {loading ? "A criar..." : "Criar registo"}
         </button>

@@ -29,15 +29,12 @@ const VideoCapture = () => {
     );
     wsSignalRef.current = wsSignal;
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     pcRef.current = pc;
 
     const sendChannel = pc.createDataChannel("alertas");
     sendChannel.onmessage = (e) => {
-      if (e.data === "DETETADO" && navigator.vibrate)
-        navigator.vibrate([200, 100, 200]);
+      if (e.data === "DETETADO" && navigator.vibrate) navigator.vibrate([200, 100, 200]);
     };
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -70,141 +67,169 @@ const VideoCapture = () => {
   };
 
   useEffect(() => {
-    return () => {
-      wsSignalRef.current?.close();
-      pcRef.current?.close();
-    };
+    return () => { wsSignalRef.current?.close(); pcRef.current?.close(); };
   }, []);
+
+  const dotColor = connected ? "var(--success)" : active ? "var(--warning)" : "var(--accent)";
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@300;400;500&display=swap');
         @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1.8); opacity: 0; }
+          0%   { transform: scale(1); opacity: 0.8; }
+          100% { transform: scale(2); opacity: 0; }
         }
         @keyframes scan-line {
-          0% { top: 0%; } 100% { top: 100%; }
+          0%   { top: 0%; }
+          100% { top: 100%; }
         }
         .scan-line { animation: scan-line 3s linear infinite; }
-
-        .vc-video-box { aspect-ratio: 9/16; max-width: 520px; width: 100%; }
-        .vc-cards { grid-template-columns: 1fr 1fr; max-width: 520px; width: 100%; }
-
+        .vc-video-box { aspect-ratio: 9/16; max-width: 480px; width: 100%; }
+        .vc-cards    { grid-template-columns: 1fr 1fr; max-width: 480px; width: 100%; }
         @media (max-width: 480px) {
-          .vc-header { padding: 12px 14px !important; }
-          .vc-main { padding: 16px !important; }
-          .vc-video-box { aspect-ratio: 9/16; }
+          .vc-header { padding: 12px 16px !important; }
+          .vc-main   { padding: 16px !important; }
         }
       `}</style>
 
-      <div className="min-h-screen flex flex-col" style={{ background: "#060810", fontFamily: "'Syne', sans-serif" }}>
+      <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
 
         {/* Header */}
-        <header className="vc-header flex items-center justify-between px-8 py-5 border-b"
-          style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)" }}>
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center text-sm text-white"
-              style={{ background: "linear-gradient(135deg, #e63946, #c1121f)", boxShadow: "0 0 16px rgba(230,57,70,0.4)" }}>
-              ◎
-            </div>
-            <span className="font-bold text-base tracking-wide" style={{ color: "#f0eee8" }}>
-              LiveEye <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>/ Câmara</span>
+        <header className="vc-header" style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 28px",
+          background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "26px", height: "26px", borderRadius: "6px",
+              background: "var(--accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "11px", color: "#fff",
+            }}>◎</div>
+            <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)" }}>
+              LiveEye{" "}
+              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>/ Câmara</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative w-2 h-2">
-              <div className="w-2 h-2 rounded-full"
-                style={{ background: connected ? "#22c55e" : active ? "#f59e0b" : "#e63946" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ position: "relative", width: "8px", height: "8px" }}>
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotColor }} />
               {connected && (
-                <div className="absolute inset-0 rounded-full"
-                  style={{ background: "#22c55e", animation: "pulse-ring 1.5s ease-out infinite" }} />
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  background: dotColor, animation: "pulse-ring 1.5s ease-out infinite",
+                }} />
               )}
             </div>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
               {status}
             </span>
           </div>
         </header>
 
         {/* Main */}
-        <main className="vc-main flex flex-1 items-center justify-center p-6">
-          <div className="flex flex-col items-center gap-6 w-full" style={{ maxWidth: "520px" }}>
+        <main className="vc-main" style={{
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px",
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "18px", width: "100%", maxWidth: "480px" }}>
 
             {/* Video box */}
-            <div className="vc-video-box relative rounded-xl overflow-hidden"
-              style={{ background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
-
+            <div className="vc-video-box" style={{
+              position: "relative", borderRadius: "12px", overflow: "hidden",
+              background: "var(--bg-raised)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-md)",
+            }}>
               {active && (
-                <div className="scan-line absolute left-0 w-full h-px pointer-events-none z-10"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(230,57,70,0.4), transparent)" }} />
+                <div className="scan-line" style={{
+                  position: "absolute", left: 0, width: "100%", height: "1px",
+                  background: "linear-gradient(90deg, transparent, rgba(192,57,43,0.3), transparent)",
+                  pointerEvents: "none", zIndex: 10,
+                }} />
               )}
 
               {/* Corner decorations */}
-              {["top-0 left-0", "top-0 right-0", "bottom-0 left-0", "bottom-0 right-0"].map((pos, i) => (
-                <div key={i} className={`absolute ${pos} w-6 h-6 z-20`} style={{
-                  borderTop: i < 2 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                  borderBottom: i >= 2 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                  borderLeft: i % 2 === 0 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                  borderRight: i % 2 === 1 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                  margin: "6px",
+              {[
+                { top: 0, left: 0,    borderTop: true,    borderLeft: true  },
+                { top: 0, right: 0,   borderTop: true,    borderRight: true },
+                { bottom: 0, left: 0,  borderBottom: true, borderLeft: true  },
+                { bottom: 0, right: 0, borderBottom: true, borderRight: true },
+              ].map((pos, i) => (
+                <div key={i} style={{
+                  position: "absolute", width: "18px", height: "18px", zIndex: 20, margin: "7px",
+                  ...pos,
+                  borderTop:    pos.borderTop    ? "1.5px solid var(--accent-border)" : "none",
+                  borderBottom: pos.borderBottom ? "1.5px solid var(--accent-border)" : "none",
+                  borderLeft:   pos.borderLeft   ? "1.5px solid var(--accent-border)" : "none",
+                  borderRight:  pos.borderRight  ? "1.5px solid var(--accent-border)" : "none",
                 }} />
               ))}
 
               {!active && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-                  <div className="text-5xl" style={{ color: "rgba(255,255,255,0.08)" }}>◎</div>
-                  <p style={{ color: "rgba(255,255,255,0.2)", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px" }}>
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: "8px", zIndex: 10,
+                }}>
+                  <div style={{ fontSize: "36px", color: "var(--border-strong)" }}>◎</div>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
                     Câmara inativa
                   </p>
                 </div>
               )}
 
               <video ref={videoRef} autoPlay playsInline muted
-                className="w-full h-full object-cover"
-                style={{ display: active ? "block" : "none" }} />
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
             </div>
 
-            {/* Button / active status */}
+            {/* Button / status */}
             {!active ? (
               <button onClick={startCamera} style={{
-                background: "#e63946", border: "none", borderRadius: "10px",
-                color: "#fff", padding: "14px 36px", fontSize: "14px",
-                fontWeight: 700, fontFamily: "'Syne', sans-serif",
-                cursor: "pointer", letterSpacing: "0.04em",
-                boxShadow: "0 0 24px rgba(230,57,70,0.35)",
-                width: "100%", maxWidth: "320px",
+                background: "var(--accent)", border: "none", borderRadius: "8px",
+                color: "#fff", padding: "13px 32px", fontSize: "14px",
+                fontWeight: 500, fontFamily: "var(--font-sans)",
+                cursor: "pointer", letterSpacing: "0.01em",
+                width: "100%", maxWidth: "300px",
               }}>
                 Ligar Sistema de Alerta
               </button>
             ) : (
-              <div className="flex items-center gap-3 px-5 py-3 rounded-xl w-full"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{
-                  background: connected ? "#22c55e" : "#f59e0b",
-                  boxShadow: `0 0 8px ${connected ? "rgba(34,197,94,0.6)" : "rgba(245,158,11,0.6)"}`,
+              <div style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "12px 16px", borderRadius: "9px", width: "100%",
+                background: "var(--bg-surface)", border: "1px solid var(--border)",
+                boxShadow: "var(--shadow-sm)",
+              }}>
+                <div style={{
+                  width: "7px", height: "7px", borderRadius: "50%", flexShrink: 0,
+                  background: connected ? "var(--success)" : "var(--warning)",
                 }} />
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-secondary)" }}>
                   {connected ? "A transmitir para o receiver" : "A estabelecer ligação..."}
                 </span>
               </div>
             )}
 
             {/* Info cards */}
-            <div className="vc-cards grid gap-3">
+            <div className="vc-cards" style={{ display: "grid", gap: "8px" }}>
               {[
                 ["WebRTC", connected ? "Ligado" : active ? "A ligar..." : "Inativo", connected],
                 ["Câmara", active ? "Ativa" : "Inativa", active],
               ].map(([label, val, ok]) => (
-                <div key={label} className="rounded-xl p-3 flex items-center justify-between"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "rgba(255,255,255,0.3)" }}>
+                <div key={label} style={{
+                  borderRadius: "8px", padding: "11px 14px",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: "var(--bg-surface)", border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-sm)",
+                }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
                     {label}
                   </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", fontWeight: 600,
-                    color: ok ? "#22c55e" : "rgba(255,255,255,0.2)" }}>
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: "11px", fontWeight: 500,
+                    color: ok ? "var(--success)" : "var(--text-muted)",
+                  }}>
                     {val}
                   </span>
                 </div>

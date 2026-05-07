@@ -41,18 +41,14 @@ const Receiver = () => {
     const ctx = canvas.getContext("2d");
     const captureCtx = capture.getContext("2d");
 
-    // Signal WebSocket
-    // CORRETO - liga ao Node na porta 3000
     const wsSignal = new WebSocket(
-    (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-signal"
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-signal"
     );
     wsSignalRef.current = wsSignal;
 
-    // YOLO WebSocket
     const wsYolo = new WebSocket("ws://localhost:8000/ws");
     wsYoloRef.current = wsYolo;
 
-    // WebRTC
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
@@ -74,9 +70,8 @@ const Receiver = () => {
     };
 
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate)
         wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
-      }
     };
 
     wsSignal.onmessage = async (message) => {
@@ -92,27 +87,22 @@ const Receiver = () => {
       }
     };
 
-    // Resize canvas to match the actual rendered area of the video (object-contain)
     const resizeCanvas = () => {
       const rect = video.getBoundingClientRect();
       const containerW = rect.width;
       const containerH = rect.height;
       const videoW = video.videoWidth || 1;
       const videoH = video.videoHeight || 1;
-
-      // Calculate the rendered size inside object-contain
       const videoAspect = videoW / videoH;
       const containerAspect = containerW / containerH;
 
       let renderW, renderH, offsetX, offsetY;
       if (videoAspect < containerAspect) {
-        // Video is taller relative to container → pillarboxed (bars on sides)
         renderH = containerH;
         renderW = containerH * videoAspect;
         offsetX = (containerW - renderW) / 2;
         offsetY = 0;
       } else {
-        // Video is wider relative to container → letterboxed (bars top/bottom)
         renderW = containerW;
         renderH = containerW / videoAspect;
         offsetX = 0;
@@ -123,18 +113,16 @@ const Receiver = () => {
       canvas.height = containerH;
       canvas.style.width = containerW + "px";
       canvas.style.height = containerH + "px";
-
-      // Store offset so draw loop can use it
       canvas._offsetX = offsetX;
       canvas._offsetY = offsetY;
       canvas._scaleX = renderW / videoW;
       canvas._scaleY = renderH / videoH;
     };
+
     video.addEventListener("loadeddata", resizeCanvas);
     video.addEventListener("loadedmetadata", resizeCanvas);
     window.addEventListener("resize", resizeCanvas);
 
-    // Send frame to YOLO
     const sendFrame = () => {
       if (
         video.videoWidth === 0 ||
@@ -150,7 +138,7 @@ const Receiver = () => {
       wsYolo.send(dataURL);
     };
 
-    wsYolo.onopen = () => console.log("YOLO WebSocket ligado");
+    wsYolo.onopen  = () => console.log("YOLO WebSocket ligado");
     wsYolo.onclose = () => console.log("YOLO WebSocket fechado");
     wsYolo.onerror = () => setStatus("Erro WebSocket YOLO");
 
@@ -164,18 +152,16 @@ const Receiver = () => {
 
       if (alertaConfirmado) {
         setAlert(true);
-        if (dataChannelRef.current?.readyState === "open") {
+        if (dataChannelRef.current?.readyState === "open")
           dataChannelRef.current.send("DETETADO");
-        }
       }
 
       setDetections(dets);
 
-      // Draw on canvas – use pre-computed scale + offset from resizeCanvas
       const scaleX = canvas._scaleX ?? (canvas.width / (video.videoWidth || 1));
       const scaleY = canvas._scaleY ?? (canvas.height / (video.videoHeight || 1));
-      const offX = canvas._offsetX ?? 0;
-      const offY = canvas._offsetY ?? 0;
+      const offX   = canvas._offsetX ?? 0;
+      const offY   = canvas._offsetY ?? 0;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -186,8 +172,8 @@ const Receiver = () => {
         const h = det.h * scaleY;
         const isKnown = !!det.name;
 
-        // Box
-        ctx.strokeStyle = isKnown ? "#22c55e" : "#e63946";
+        // Box — use light-mode colors: terracotta for unknown, green for known
+        ctx.strokeStyle = isKnown ? "#2d7a4f" : "#c0392b";
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
 
@@ -204,9 +190,9 @@ const Receiver = () => {
 
         // Label
         if (det.name) {
-          ctx.fillStyle = isKnown ? "rgba(34,197,94,0.85)" : "rgba(230,57,70,0.85)";
+          ctx.fillStyle = isKnown ? "rgba(45,122,79,0.9)" : "rgba(192,57,43,0.9)";
           const label = det.name;
-          ctx.font = "bold 13px 'JetBrains Mono', monospace";
+          ctx.font = "500 12px 'DM Mono', monospace";
           const tw = ctx.measureText(label).width;
           ctx.fillRect(x, y - 22, tw + 12, 22);
           ctx.fillStyle = "#fff";
@@ -217,9 +203,7 @@ const Receiver = () => {
       setTimeout(sendFrame, 50);
     };
 
-    video.addEventListener("play", () => {
-      sendFrame();
-    });
+    video.addEventListener("play", () => { sendFrame(); });
 
     return () => {
       wsSignal.close();
@@ -232,81 +216,88 @@ const Receiver = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@300;400;500&display=swap');
 
         @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1.8); opacity: 0; }
+          0%   { transform: scale(1); opacity: 0.8; }
+          100% { transform: scale(2); opacity: 0; }
         }
         @keyframes alert-flash {
           0%, 100% { opacity: 0; }
-          50% { opacity: 1; }
+          50%       { opacity: 1; }
         }
         @keyframes scan-line {
-          0% { top: 0%; }
+          0%   { top: 0%; }
           100% { top: 100%; }
         }
-        .scan-line {
-          animation: scan-line 3s linear infinite;
-        }
-        .alert-flash {
-          animation: alert-flash 0.4s ease-in-out 3;
-        }
+        .scan-line   { animation: scan-line 3s linear infinite; }
+        .alert-flash { animation: alert-flash 0.4s ease-in-out 3; }
       `}</style>
 
-      <div
-        className="min-h-screen flex flex-col"
-        style={{
-          background: "#060810",
-          fontFamily: "'Syne', sans-serif",
-        }}
-      >
+      <div style={{
+        minHeight: "100svh", display: "flex", flexDirection: "column",
+        background: "var(--bg)", fontFamily: "var(--font-sans)",
+      }}>
+
         {/* Alert overlay */}
         {alert && (
-          <div
-            className="alert-flash fixed inset-0 pointer-events-none z-50"
-            style={{ background: "rgba(230,57,70,0.15)", border: "3px solid #e63946" }}
-          />
+          <div className="alert-flash" style={{
+            position: "fixed", inset: 0, pointerEvents: "none", zIndex: 50,
+            background: "rgba(192,57,43,0.1)", border: "3px solid var(--accent)",
+          }} />
         )}
 
         {/* Header */}
-        <header className="flex items-center justify-between px-8 py-5 border-b"
-          style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)" }}>
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center text-sm"
-              style={{ background: "linear-gradient(135deg, #e63946, #c1121f)", boxShadow: "0 0 16px rgba(230,57,70,0.4)" }}>
-              ◎
-            </div>
-            <span className="font-bold text-base tracking-wide" style={{ color: "#f0eee8" }}>
-              LiveEye <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>/ Receiver</span>
+        <header style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 28px",
+          background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "26px", height: "26px", borderRadius: "6px",
+              background: "var(--accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "11px", color: "#fff",
+            }}>◎</div>
+            <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)" }}>
+              LiveEye{" "}
+              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>/ Receiver</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
             {/* FPS */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>FPS</span>
-              <span className="text-sm font-bold" style={{ color: "#f0eee8", fontFamily: "'JetBrains Mono', monospace" }}>{fps}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>FPS</span>
+              <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
             </div>
 
             {/* Detections */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>DETEÇÕES</span>
-              <span className="text-sm font-bold" style={{ color: detections.length > 0 ? "#e63946" : "#f0eee8", fontFamily: "'JetBrains Mono', monospace" }}>
-                {detections.length}
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Deteções</span>
+              <span style={{
+                fontSize: "13px", fontWeight: 500, fontFamily: "var(--font-mono)",
+                color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)",
+              }}>{detections.length}</span>
             </div>
 
             {/* Status */}
-            <div className="flex items-center gap-2">
-              <div className="relative w-2 h-2">
-                <div className="w-2 h-2 rounded-full" style={{ background: connected ? "#22c55e" : "#e63946" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+              <div style={{ position: "relative", width: "8px", height: "8px" }}>
+                <div style={{
+                  width: "8px", height: "8px", borderRadius: "50%",
+                  background: connected ? "var(--success)" : "var(--accent)",
+                }} />
                 {connected && (
-                  <div className="absolute inset-0 rounded-full"
-                    style={{ background: "#22c55e", animation: "pulse-ring 1.5s ease-out infinite" }} />
+                  <div style={{
+                    position: "absolute", inset: 0, borderRadius: "50%",
+                    background: "var(--success)",
+                    animation: "pulse-ring 1.5s ease-out infinite",
+                  }} />
                 )}
               </div>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 {status}
               </span>
             </div>
@@ -314,42 +305,53 @@ const Receiver = () => {
         </header>
 
         {/* Main */}
-        <main className="flex flex-1 gap-6 p-6">
+        <main style={{ flex: 1, display: "flex", gap: "20px", padding: "20px" }}>
 
           {/* Video area */}
-          <div className="flex flex-col items-center gap-4" style={{ flex: "0 0 auto" }}>
-            <div className="relative rounded-xl overflow-hidden"
-              style={{
-                background: "#000",
-                border: "1px solid rgba(255,255,255,0.08)",
-                aspectRatio: "9/16",
-                height: "calc(100vh - 100px)",
-                width: "auto",
-              }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", flex: "0 0 auto" }}>
+            <div style={{
+              position: "relative", borderRadius: "12px", overflow: "hidden",
+              background: "var(--bg-raised)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-md)",
+              aspectRatio: "9/16",
+              height: "calc(100svh - 100px)",
+              width: "auto",
+            }}>
 
-              {/* Scan line effect when connected */}
+              {/* Scan line */}
               {connected && (
-                <div className="scan-line absolute left-0 w-full h-px pointer-events-none z-10"
-                  style={{ background: "linear-gradient(90deg, transparent, rgba(230,57,70,0.4), transparent)" }} />
+                <div className="scan-line" style={{
+                  position: "absolute", left: 0, width: "100%", height: "1px",
+                  background: "linear-gradient(90deg, transparent, rgba(192,57,43,0.25), transparent)",
+                  pointerEvents: "none", zIndex: 10,
+                }} />
               )}
 
               {/* Corner decorations */}
-              {["top-0 left-0", "top-0 right-0", "bottom-0 left-0", "bottom-0 right-0"].map((pos, i) => (
-                <div key={i} className={`absolute ${pos} w-6 h-6 z-20`}
-                  style={{
-                    borderTop: i < 2 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                    borderBottom: i >= 2 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                    borderLeft: i % 2 === 0 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                    borderRight: i % 2 === 1 ? "2px solid rgba(230,57,70,0.5)" : "none",
-                    margin: "6px",
-                  }} />
+              {[
+                { top: 0,    left: 0,    borderTop: true,    borderLeft: true  },
+                { top: 0,    right: 0,   borderTop: true,    borderRight: true },
+                { bottom: 0, left: 0,    borderBottom: true, borderLeft: true  },
+                { bottom: 0, right: 0,   borderBottom: true, borderRight: true },
+              ].map((pos, i) => (
+                <div key={i} style={{
+                  position: "absolute", width: "18px", height: "18px", zIndex: 20, margin: "7px",
+                  ...pos,
+                  borderTop:    pos.borderTop    ? "1.5px solid var(--accent-border)" : "none",
+                  borderBottom: pos.borderBottom ? "1.5px solid var(--accent-border)" : "none",
+                  borderLeft:   pos.borderLeft   ? "1.5px solid var(--accent-border)" : "none",
+                  borderRight:  pos.borderRight  ? "1.5px solid var(--accent-border)" : "none",
+                }} />
               ))}
 
               {/* Waiting state */}
               {!connected && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-                  <div className="text-4xl" style={{ color: "rgba(255,255,255,0.1)" }}>◎</div>
-                  <p style={{ color: "rgba(255,255,255,0.2)", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px" }}>
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: "10px", zIndex: 10,
+                }}>
+                  <div style={{ fontSize: "32px", color: "var(--border-strong)" }}>◎</div>
+                  <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
                     A aguardar stream...
                   </p>
                 </div>
@@ -357,54 +359,72 @@ const Receiver = () => {
 
               <video
                 ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-contain"
-                style={{ display: connected ? "block" : "none" }}
+                autoPlay playsInline muted
+                style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }}
               />
               <canvas
                 ref={overlayRef}
-                className="absolute top-0 left-0 pointer-events-none"
+                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
               />
 
               {/* Alert banner */}
               {alert && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-5 py-2 rounded-full"
-                  style={{ background: "rgba(230,57,70,0.9)", boxShadow: "0 0 24px rgba(230,57,70,0.6)" }}>
-                  <span className="text-white font-bold text-sm tracking-widest">⚠ FACE RECONHECIDA</span>
+                <div style={{
+                  position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
+                  zIndex: 30, display: "flex", alignItems: "center", gap: "8px",
+                  padding: "8px 20px", borderRadius: "99px",
+                  background: "var(--accent)", boxShadow: "0 4px 16px rgba(192,57,43,0.3)",
+                }}>
+                  <span style={{ color: "#fff", fontWeight: 600, fontSize: "13px", letterSpacing: "0.06em" }}>
+                    ⚠ FACE RECONHECIDA
+                  </span>
                 </div>
               )}
             </div>
 
-            {/* Hidden capture canvas */}
-            <canvas ref={captureRef} className="hidden" />
+            <canvas ref={captureRef} style={{ display: "none" }} />
           </div>
 
           {/* Side panel */}
-          <div className="w-64 flex flex-col gap-4 flex-shrink-0">
+          <div style={{ width: "240px", display: "flex", flexDirection: "column", gap: "12px", flexShrink: 0 }}>
 
             {/* Live detections */}
-            <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-xs font-semibold mb-3 tracking-widest uppercase"
-                style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>
-                Deteções ativas
-              </p>
+            <div style={{
+              borderRadius: "10px", padding: "16px",
+              background: "var(--bg-surface)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-sm)",
+            }}>
+              <p style={{
+                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
+                letterSpacing: "0.09em", textTransform: "uppercase",
+                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+              }}>Deteções ativas</p>
+
               {detections.length === 0 ? (
-                <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                <p style={{ color: "var(--text-muted)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>
                   Nenhuma deteção
                 </p>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {detections.map((det, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2"
-                      style={{ background: det.name ? "rgba(34,197,94,0.08)" : "rgba(230,57,70,0.08)", border: `1px solid ${det.name ? "rgba(34,197,94,0.2)" : "rgba(230,57,70,0.2)"}` }}>
-                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                        style={{ background: det.name ? "#22c55e" : "#e63946" }} />
-                      <span className="text-xs truncate" style={{ color: det.name ? "#22c55e" : "#e63946", fontFamily: "'JetBrains Mono', monospace" }}>
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      borderRadius: "7px", padding: "7px 10px",
+                      background: det.name ? "var(--success-light)" : "var(--accent-light)",
+                      border: `1px solid ${det.name ? "var(--success-border)" : "var(--accent-border)"}`,
+                    }}>
+                      <div style={{
+                        width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
+                        background: det.name ? "var(--success)" : "var(--accent)",
+                      }} />
+                      <span style={{
+                        fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        color: det.name ? "var(--success)" : "var(--accent)",
+                        fontFamily: "var(--font-mono)",
+                      }}>
                         {det.name || `Pessoa #${i + 1}`}
                       </span>
-                      <span className="ml-auto text-xs" style={{ color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>
+                      <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                         {Math.round(det.conf * 100)}%
                       </span>
                     </div>
@@ -414,38 +434,63 @@ const Receiver = () => {
             </div>
 
             {/* System info */}
-            <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-xs font-semibold mb-3 tracking-widest uppercase"
-                style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>
-                Sistema
-              </p>
+            <div style={{
+              borderRadius: "10px", padding: "16px",
+              background: "var(--bg-surface)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-sm)",
+            }}>
+              <p style={{
+                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
+                letterSpacing: "0.09em", textTransform: "uppercase",
+                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+              }}>Sistema</p>
+
               {[
-                ["WebRTC", connected ? "Ligado" : "Desligado", connected],
-                ["YOLO", fps > 0 ? "Ativo" : "Inativo", fps > 0],
-                ["Alertas", alert ? "ATIVO" : "Normal", alert],
+                ["WebRTC",  connected ? "Ligado" : "Desligado", connected],
+                ["YOLO",    fps > 0   ? "Ativo"  : "Inativo",  fps > 0],
+                ["Alertas", alert     ? "ATIVO"  : "Normal",   alert],
               ].map(([label, val, ok]) => (
-                <div key={label} className="flex items-center justify-between mb-2">
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>{label}</span>
-                  <span className="text-xs font-semibold" style={{ color: ok ? "#22c55e" : "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {val}
-                  </span>
+                <div key={label} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
+                  <span style={{
+                    fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)",
+                    color: ok ? "var(--success)" : "var(--text-muted)",
+                  }}>{val}</span>
                 </div>
               ))}
             </div>
 
             {/* Legend */}
-            <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-xs font-semibold mb-3 tracking-widest uppercase"
-                style={{ color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>
-                Legenda
-              </p>
-              {[["#e63946", "Pessoa não identificada"], ["#22c55e", "Pessoa reconhecida"]].map(([color, label]) => (
-                <div key={label} className="flex items-center gap-2 mb-2">
-                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono', monospace" }}>{label}</span>
+            <div style={{
+              borderRadius: "10px", padding: "16px",
+              background: "var(--bg-surface)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-sm)",
+            }}>
+              <p style={{
+                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
+                letterSpacing: "0.09em", textTransform: "uppercase",
+                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+              }}>Legenda</p>
+
+              {[
+                ["var(--accent)",  "Pessoa não identificada"],
+                ["var(--success)", "Pessoa reconhecida"],
+              ].map(([color, label]) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{
+                    width: "10px", height: "10px", borderRadius: "3px", flexShrink: 0,
+                    background: color,
+                  }} />
+                  <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                    {label}
+                  </span>
                 </div>
               ))}
             </div>
+
           </div>
         </main>
       </div>

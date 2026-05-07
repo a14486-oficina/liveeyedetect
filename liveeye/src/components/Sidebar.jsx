@@ -1,16 +1,16 @@
 const NAV = [
-  { id: "add", label: "Adicionar", icon: "＋" },
+  { id: "add",     label: "Adicionar",    icon: "＋" },
   { id: "missing", label: "Desaparecidas", icon: "◎" },
-  { id: "found", label: "Encontradas", icon: "✓" },
+  { id: "found",   label: "Encontradas",  icon: "✓" },
 ];
- 
+
 const Sidebar = ({ active, onNavigate, counts }) => {
   return (
     <aside style={{
-      width: "230px",
+      width: "220px",
       flexShrink: 0,
-      background: "#080b12",
-      borderRight: "1px solid rgba(255,255,255,0.06)",
+      background: "var(--bg-surface)",
+      borderRight: "1px solid var(--border)",
       display: "flex",
       flexDirection: "column",
       position: "fixed",
@@ -19,50 +19,51 @@ const Sidebar = ({ active, onNavigate, counts }) => {
       left: 0,
       zIndex: 100,
     }}>
+      {/* Logo */}
       <div style={{
-        padding: "28px 24px 24px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "28px 22px 22px",
+        borderBottom: "1px solid var(--border)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px" }}>
           <div style={{
-            width: "28px", height: "28px", borderRadius: "6px",
-            background: "linear-gradient(135deg, #e63946, #c1121f)",
+            width: "26px", height: "26px", borderRadius: "6px",
+            background: "var(--accent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "13px", boxShadow: "0 0 16px rgba(230,57,70,0.35)", color: "#fff",
+            fontSize: "11px", color: "#fff",
           }}>◎</div>
           <span style={{
-            fontFamily: "'Syne', sans-serif", fontSize: "15px",
-            fontWeight: 700, color: "#f0eee8", letterSpacing: "0.02em",
+            fontFamily: "var(--font-sans)", fontSize: "15px",
+            fontWeight: 600, color: "var(--text-primary)",
           }}>LiveEye</span>
         </div>
         <span style={{
-          fontSize: "10px", color: "rgba(255,255,255,0.25)",
-          letterSpacing: "0.12em", textTransform: "uppercase",
-          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "10px", color: "var(--text-muted)",
+          letterSpacing: "0.1em", textTransform: "uppercase",
+          fontFamily: "var(--font-mono)",
         }}>Sistema PAP</span>
       </div>
- 
-      <nav style={{ padding: "16px 12px", flex: 1 }}>
+
+      {/* Nav */}
+      <nav style={{ padding: "14px 12px", flex: 1 }}>
         {NAV.map((item) => {
           const isActive = active === item.id;
           return (
             <button key={item.id} onClick={() => onNavigate(item.id)} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: "10px",
-              padding: "10px 12px", borderRadius: "8px", border: "none",
-              background: isActive ? "rgba(230,57,70,0.12)" : "transparent",
-              color: isActive ? "#e63946" : "rgba(255,255,255,0.45)",
-              cursor: "pointer", marginBottom: "2px", transition: "all 0.15s",
-              textAlign: "left", fontFamily: "'Syne', sans-serif", fontSize: "13px",
-              fontWeight: isActive ? 600 : 400, letterSpacing: "0.01em",
-              borderLeft: isActive ? "2px solid #e63946" : "2px solid transparent",
+              width: "100%", display: "flex", alignItems: "center", gap: "9px",
+              padding: "9px 12px", borderRadius: "7px", border: "none",
+              background: isActive ? "var(--accent-light)" : "transparent",
+              color: isActive ? "var(--accent)" : "var(--text-secondary)",
+              cursor: "pointer", marginBottom: "2px", transition: "all 0.12s",
+              textAlign: "left", fontFamily: "var(--font-sans)", fontSize: "13px",
+              fontWeight: isActive ? 500 : 400,
             }}>
-              <span style={{ fontSize: "15px", width: "18px", textAlign: "center" }}>{item.icon}</span>
+              <span style={{ fontSize: "13px", width: "16px", textAlign: "center", opacity: 0.8 }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
               {counts[item.id] > 0 && (
                 <span style={{
-                  fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
-                  background: isActive ? "rgba(230,57,70,0.2)" : "rgba(255,255,255,0.07)",
-                  color: isActive ? "#e63946" : "rgba(255,255,255,0.35)",
+                  fontSize: "10px", fontFamily: "var(--font-mono)",
+                  background: isActive ? "var(--accent-mid)" : "var(--bg-subtle)",
+                  color: isActive ? "var(--accent)" : "var(--text-muted)",
                   padding: "2px 7px", borderRadius: "99px",
                 }}>{counts[item.id]}</span>
               )}
@@ -70,15 +71,16 @@ const Sidebar = ({ active, onNavigate, counts }) => {
           );
         })}
       </nav>
- 
-      <div style={{ padding: "16px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+
+      {/* Footer */}
+      <div style={{ padding: "16px 22px", borderTop: "1px solid var(--border)" }}>
         <span style={{
-          fontSize: "10px", color: "rgba(255,255,255,0.2)",
-          fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em",
+          fontSize: "10px", color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)", letterSpacing: "0.06em",
         }}>v1.0.0</span>
       </div>
     </aside>
   );
 };
- 
+
 export default Sidebar;

@@ -130,6 +130,138 @@ async def websocket_endpoint(ws: WebSocket):
 
 */
 """
+"""
+from ultralytics import YOLO
+import cv2
+import base64
+import numpy as np
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+model = YOLO("yolo26n.pt")
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+
+    while True:
+        data = await ws.receive_text()
+
+        # converter base64 → imagem
+        img_bytes = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        results = model(frame)[0]
+
+        detections = []
+
+        for box in results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+
+            detections.append({
+                "x": x1,
+                "y": y1,
+                "w": x2 - x1,
+                "h": y2 - y1,
+                "conf": conf,
+                "cls": cls
+            })
+
+        await ws.send_json(detections)
+
+*/
+"""
+"""
+from ultralytics import YOLO
+import cv2
+import base64
+import numpy as np
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+model = YOLO("yolo26n.pt")
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+
+    while True:
+        data = await ws.receive_text()
+
+        # converter base64 → imagem
+        img_bytes = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        results = model(frame)[0]
+
+        detections = []
+
+        for box in results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+
+            detections.append({
+                "x": x1,
+                "y": y1,
+                "w": x2 - x1,
+                "h": y2 - y1,
+                "conf": conf,
+                "cls": cls
+            })
+
+        await ws.send_json(detections)
+
+*/
+"""
+"""
+from ultralytics import YOLO
+import cv2
+import base64
+import numpy as np
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+model = YOLO("yolo26n.pt")
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+
+    while True:
+        data = await ws.receive_text()
+
+        # converter base64 → imagem
+        img_bytes = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        results = model(frame)[0]
+
+        detections = []
+
+        for box in results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+
+            detections.append({
+                "x": x1,
+                "y": y1,
+                "w": x2 - x1,
+                "h": y2 - y1,
+                "conf": conf,
+                "cls": cls
+            })
+
+        await ws.send_json(detections)
+
+*/
+"""
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
@@ -505,38 +637,39 @@ async def websocket_endpoint(ws: WebSocket):
             if frame is None:
                 continue
 
-            yolo_results = model(frame)[0]
+            # classes=0 → YOLO só corre inferência para a classe "person",
+            # ignorando todos os outros objetos desde o início.
+            yolo_results = model(frame, classes=[0])[0]
             detections = []
             alerta_confirmado = False
 
             for box in yolo_results.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
-                cls = int(box.cls[0])
+                cls = int(box.cls[0])  # será sempre 0 (person)
                 name = None
 
-                if cls == 0:
-                    person_img = frame[y1:y2, x1:x2]
-                    if person_img.size > 0:
-                        rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
-                        face_locations = face_recognition.face_locations(rgb, model="hog")
-                        encodings = face_recognition.face_encodings(rgb, face_locations)
+                person_img = frame[y1:y2, x1:x2]
+                if person_img.size > 0:
+                    rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
+                    face_locations = face_recognition.face_locations(rgb, model="hog")
+                    encodings = face_recognition.face_encodings(rgb, face_locations)
 
-                        for encoding in encodings:
-                            # Pesquisa em TODOS os points (incluindo fotos 1 e 2)
-                            search_result = qdrant.query_points(
-                                collection_name="pessoas",
-                                query=encoding.tolist(),
-                                query_filter=Filter(
-                                    must=[FieldCondition(key="Desaparecida", match=MatchValue(value=True))]
-                                ),
-                                limit=1,
-                            )
-                            if search_result.points and search_result.points[0].score > 0.95:
-                                matched = search_result.points[0]
-                                name = matched.payload.get("nome")
-                                alerta_confirmado = True
-                                break
+                    for encoding in encodings:
+                        # Pesquisa em TODOS os points (incluindo fotos 1 e 2)
+                        search_result = qdrant.query_points(
+                            collection_name="pessoas",
+                            query=encoding.tolist(),
+                            query_filter=Filter(
+                                must=[FieldCondition(key="Desaparecida", match=MatchValue(value=True))]
+                            ),
+                            limit=1,
+                        )
+                        if search_result.points and search_result.points[0].score > 0.95:
+                            matched = search_result.points[0]
+                            name = matched.payload.get("nome")
+                            alerta_confirmado = True
+                            break
 
                 detections.append({
                     "x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1,

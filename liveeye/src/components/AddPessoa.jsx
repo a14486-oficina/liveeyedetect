@@ -1,7 +1,7 @@
-import { useState } from "react";
- 
+import { useState, useRef } from "react";
+
 const API = "http://127.0.0.1:8000";
- 
+
 const s = {
   label: {
     fontSize: "10px", fontWeight: 600, color: "rgba(255,255,255,0.3)",
@@ -20,22 +20,99 @@ const s = {
     borderRadius: "12px", padding: "24px",
   },
 };
- 
+
+const PhotoSlot = ({ label, file, onChange }) => {
+  const inputRef = useRef(null);
+  const preview = file ? URL.createObjectURL(file) : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <span style={s.label}>{label}</span>
+      <div
+        onClick={() => inputRef.current.click()}
+        style={{
+          width: "100%", aspectRatio: "1 / 1",
+          background: preview ? "transparent" : "rgba(255,255,255,0.02)",
+          border: preview ? "1px solid rgba(230,57,70,0.35)" : "1.5px dashed rgba(255,255,255,0.12)",
+          borderRadius: "10px", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", position: "relative",
+          transition: "border-color 0.2s",
+        }}
+      >
+        {preview ? (
+          <>
+            <img
+              src={preview}
+              alt={label}
+              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "9px" }}
+            />
+            {/* overlay on hover */}
+            <div style={{
+              position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              opacity: 0, transition: "opacity 0.2s",
+              borderRadius: "9px", fontSize: "11px", color: "#f0eee8",
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+              onMouseEnter={e => e.currentTarget.style.opacity = 1}
+              onMouseLeave={e => e.currentTarget.style.opacity = 0}
+            >
+              Alterar
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)" }}>
+            <div style={{ fontSize: "24px", marginBottom: "6px" }}>+</div>
+            <div style={{ fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+              Clica para adicionar
+            </div>
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => onChange(e.target.files[0] || null)}
+      />
+      {file && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onChange(null); inputRef.current.value = ""; }}
+          style={{
+            background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.2)",
+            borderRadius: "6px", color: "#e63946", fontSize: "11px",
+            padding: "4px 8px", cursor: "pointer", fontFamily: "'Syne', sans-serif",
+            alignSelf: "flex-start",
+          }}
+        >✕ Remover</button>
+      )}
+    </div>
+  );
+};
+
 const AddPessoa = ({ onSuccess }) => {
   const [form, setForm] = useState({
     nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "",
   });
-  const [imagem, setImagem] = useState(null);
+  const [fotos, setFotos] = useState([null, null, null]);
   const [locs, setLocs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
- 
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
- 
+
+  const setFoto = (i) => (file) => setFotos((prev) => {
+    const next = [...prev];
+    next[i] = file;
+    return next;
+  });
+
   const addLoc = () => setLocs((l) => [...l, { lat: "", lon: "", data: "", hora: "" }]);
   const removeLoc = (i) => setLocs((l) => l.filter((_, idx) => idx !== i));
   const setLoc = (i, k) => (e) => setLocs((l) => l.map((loc, idx) => idx === i ? { ...loc, [k]: e.target.value } : loc));
- 
+
   const validate = () => {
     if (!form.nome.trim()) return "Nome é obrigatório";
     if (/\d/.test(form.nome)) return "Nome não pode conter números";
@@ -44,12 +121,12 @@ const AddPessoa = ({ onSuccess }) => {
     if (!form.sexo) return "Seleciona um sexo";
     if (form.sexo === "Outro" && !form.sexoOutro.trim()) return "Especifica o sexo";
     if (!form.lat || !form.lon || isNaN(form.lat) || isNaN(form.lon)) return "Coordenadas inválidas";
-    if (form.lat < -90 || form.lat > 90) return "Latitude entre -90 e 90";
-    if (form.lon < -180 || form.lon > 180) return "Longitude entre -180 e 180";
-    if (!imagem) return "Seleciona uma imagem";
+    if (parseFloat(form.lat) < -90 || parseFloat(form.lat) > 90) return "Latitude entre -90 e 90";
+    if (parseFloat(form.lon) < -180 || parseFloat(form.lon) > 180) return "Longitude entre -180 e 180";
+    if (!fotos[0]) return "A primeira fotografia é obrigatória";
     return null;
   };
- 
+
   const submit = async () => {
     setError("");
     const err = validate();
@@ -64,23 +141,35 @@ const AddPessoa = ({ onSuccess }) => {
       fd.append("lat", parseFloat(form.lat));
       fd.append("lon", parseFloat(form.lon));
       fd.append("observacoes", form.obs.trim());
-      fd.append("imagem", imagem);
-      fd.append("historico", JSON.stringify(locs.filter(l => l.lat && l.lon).map(l => ({
-        lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
-      }))));
+
+      // imagem1 obrigatória, imagem2 e imagem3 opcionais
+      fd.append("imagem1", fotos[0]);
+      if (fotos[1]) fd.append("imagem2", fotos[1]);
+      if (fotos[2]) fd.append("imagem3", fotos[2]);
+
+      fd.append("historico", JSON.stringify(
+        locs.filter(l => l.lat && l.lon).map(l => ({
+          lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
+        }))
+      ));
+
       const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Erro ao criar");
+      const json = await res.json();
+      if (!res.ok || json.erro) throw new Error(json.erro || "Erro ao criar");
+
+      // Reset
       setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "" });
-      setImagem(null); setLocs([]);
+      setFotos([null, null, null]);
+      setLocs([]);
       onSuccess();
     } catch (e) {
-      setError("Erro ao criar pessoa. Verifica o servidor.");
+      setError(e.message || "Erro ao criar pessoa. Verifica o servidor.");
     } finally { setLoading(false); }
   };
- 
+
   const inputFocus = (e) => e.target.style.borderColor = "rgba(230,57,70,0.6)";
   const inputBlur = (e) => e.target.style.borderColor = "rgba(255,255,255,0.08)";
- 
+
   return (
     <div>
       <div style={{ marginBottom: "28px" }}>
@@ -91,8 +180,9 @@ const AddPessoa = ({ onSuccess }) => {
           Preenche os dados para criar um novo registo
         </p>
       </div>
- 
+
       <div style={s.card}>
+        {/* Dados pessoais */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
           <div style={s.group}>
             <label style={s.label}>Nome completo</label>
@@ -132,25 +222,29 @@ const AddPessoa = ({ onSuccess }) => {
               onFocus={inputFocus} onBlur={inputBlur} />
           </div>
           <div style={{ ...s.group, gridColumn: "1 / -1" }}>
-            <label style={s.label}>Fotografia</label>
-            <input type="file" accept="image/*" onChange={(e) => setImagem(e.target.files[0])}
-              style={{ ...s.input, cursor: "pointer", color: "rgba(255,255,255,0.4)" }} />
-          </div>
-          <div style={{ ...s.group, gridColumn: "1 / -1" }}>
             <label style={s.label}>Observações</label>
-            <input
-              style={s.input}
-              value={form.obs}
-              onChange={set("obs")}
+            <input style={s.input} value={form.obs} onChange={set("obs")}
               placeholder="Indique dados extra sobre a pessoa..."
-              onFocus={inputFocus}
-              onBlur={inputBlur}
-            />
+              onFocus={inputFocus} onBlur={inputBlur} />
           </div>
         </div>
- 
-        {/* Localizações */}
+
+        {/* Fotografias */}
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "20px", marginTop: "4px" }}>
+          <p style={{ ...s.label, marginBottom: "14px" }}>
+            Fotografias <span style={{ color: "rgba(255,255,255,0.18)", fontWeight: 400 }}>
+              — 1 obrigatória, até 3 (ângulos diferentes melhoram o reconhecimento)
+            </span>
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
+            <PhotoSlot label="Foto 1 (obrigatória)" file={fotos[0]} onChange={setFoto(0)} />
+            <PhotoSlot label="Foto 2 (opcional)" file={fotos[1]} onChange={setFoto(1)} />
+            <PhotoSlot label="Foto 3 (opcional)" file={fotos[2]} onChange={setFoto(2)} />
+          </div>
+        </div>
+
+        {/* Localizações */}
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "20px", marginTop: "20px" }}>
           <p style={{ ...s.label, marginBottom: "12px" }}>Últimas localizações conhecidas</p>
           {locs.map((loc, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
@@ -176,7 +270,7 @@ const AddPessoa = ({ onSuccess }) => {
             transition: "all 0.15s", marginTop: "4px",
           }}>+ Adicionar localização</button>
         </div>
- 
+
         {error && (
           <div style={{
             marginTop: "16px", background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.25)",
@@ -184,7 +278,7 @@ const AddPessoa = ({ onSuccess }) => {
             fontFamily: "'JetBrains Mono', monospace",
           }}>⚠ {error}</div>
         )}
- 
+
         <button onClick={submit} disabled={loading} style={{
           marginTop: "20px", background: loading ? "rgba(230,57,70,0.5)" : "#e63946",
           border: "none", borderRadius: "8px", color: "#fff", padding: "12px 28px",
@@ -198,5 +292,5 @@ const AddPessoa = ({ onSuccess }) => {
     </div>
   );
 };
- 
+
 export default AddPessoa;

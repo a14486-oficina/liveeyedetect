@@ -92,15 +92,46 @@ const Receiver = () => {
       }
     };
 
-    // Resize canvas to match video
+    // Resize canvas to match the actual rendered area of the video (object-contain)
     const resizeCanvas = () => {
       const rect = video.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      canvas.style.width = rect.width + "px";
-      canvas.style.height = rect.height + "px";
+      const containerW = rect.width;
+      const containerH = rect.height;
+      const videoW = video.videoWidth || 1;
+      const videoH = video.videoHeight || 1;
+
+      // Calculate the rendered size inside object-contain
+      const videoAspect = videoW / videoH;
+      const containerAspect = containerW / containerH;
+
+      let renderW, renderH, offsetX, offsetY;
+      if (videoAspect < containerAspect) {
+        // Video is taller relative to container → pillarboxed (bars on sides)
+        renderH = containerH;
+        renderW = containerH * videoAspect;
+        offsetX = (containerW - renderW) / 2;
+        offsetY = 0;
+      } else {
+        // Video is wider relative to container → letterboxed (bars top/bottom)
+        renderW = containerW;
+        renderH = containerW / videoAspect;
+        offsetX = 0;
+        offsetY = (containerH - renderH) / 2;
+      }
+
+      canvas.width = containerW;
+      canvas.height = containerH;
+      canvas.style.width = containerW + "px";
+      canvas.style.height = containerH + "px";
+
+      // Store offset so draw loop can use it
+      canvas._offsetX = offsetX;
+      canvas._offsetY = offsetY;
+      canvas._scaleX = renderW / videoW;
+      canvas._scaleY = renderH / videoH;
     };
     video.addEventListener("loadeddata", resizeCanvas);
+    video.addEventListener("loadedmetadata", resizeCanvas);
     window.addEventListener("resize", resizeCanvas);
 
     // Send frame to YOLO
@@ -140,16 +171,17 @@ const Receiver = () => {
 
       setDetections(dets);
 
-      // Draw on canvas
-      const rect = video.getBoundingClientRect();
-      const scaleX = rect.width / video.videoWidth;
-      const scaleY = rect.height / video.videoHeight;
+      // Draw on canvas – use pre-computed scale + offset from resizeCanvas
+      const scaleX = canvas._scaleX ?? (canvas.width / (video.videoWidth || 1));
+      const scaleY = canvas._scaleY ?? (canvas.height / (video.videoHeight || 1));
+      const offX = canvas._offsetX ?? 0;
+      const offY = canvas._offsetY ?? 0;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       dets.forEach((det) => {
-        const x = det.x * scaleX;
-        const y = det.y * scaleY;
+        const x = det.x * scaleX + offX;
+        const y = det.y * scaleY + offY;
         const w = det.w * scaleX;
         const h = det.h * scaleY;
         const isKnown = !!det.name;
@@ -285,9 +317,15 @@ const Receiver = () => {
         <main className="flex flex-1 gap-6 p-6">
 
           {/* Video area */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-4" style={{ flex: "0 0 auto" }}>
             <div className="relative rounded-xl overflow-hidden"
-              style={{ background: "#000", border: "1px solid rgba(255,255,255,0.08)", aspectRatio: "16/9" }}>
+              style={{
+                background: "#000",
+                border: "1px solid rgba(255,255,255,0.08)",
+                aspectRatio: "9/16",
+                height: "calc(100vh - 100px)",
+                width: "auto",
+              }}>
 
               {/* Scan line effect when connected */}
               {connected && (
@@ -322,7 +360,7 @@ const Receiver = () => {
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 style={{ display: connected ? "block" : "none" }}
               />
               <canvas

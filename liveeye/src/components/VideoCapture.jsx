@@ -89,13 +89,13 @@ const VideoCapture = () => {
         }
         .scan-line { animation: scan-line 3s linear infinite; }
 
-        .vc-video-box { aspect-ratio: 4/3; max-width: 520px; width: 100%; }
+        .vc-video-box { aspect-ratio: 9/16; max-width: 520px; width: 100%; }
         .vc-cards { grid-template-columns: 1fr 1fr; max-width: 520px; width: 100%; }
 
         @media (max-width: 480px) {
           .vc-header { padding: 12px 14px !important; }
           .vc-main { padding: 16px !important; }
-          .vc-video-box { aspect-ratio: 4/3; }
+          .vc-video-box { aspect-ratio: 9/16; }
         }
       `}</style>
 

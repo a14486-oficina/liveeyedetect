@@ -270,6 +270,8 @@ from ultralytics import YOLO
 from dotenv import load_dotenv
 from decimal import Decimal
 from typing import Optional
+from passlib.context import CryptContext
+from pydantic import BaseModel
 import cv2
 import base64
 import numpy as np
@@ -277,6 +279,8 @@ import face_recognition
 import datetime
 import os
 import json
+import mysql.connector
+
 
 load_dotenv()
 
@@ -287,6 +291,77 @@ qdrant = QdrantClient(
 
 app = FastAPI()
 model = YOLO("yolo26n.pt")
+
+
+# ── Configuração da password hash ─────────────────────────────────────────────
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ── Ligação ao MySQL ──────────────────────────────────────────────────────────
+def get_db():
+    return mysql.connector.connect(
+        host="localhost",
+        port=3306,
+        user=os.getenv("MySQL_USER"),
+        password=os.getenv("MySQL_PASSWORD"),           
+        database="liveeyedetect"
+    )
+
+# ── Schema do body do login ───────────────────────────────────────────────────
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+# ── Endpoint POST /login ──────────────────────────────────────────────────────
+@app.post("/login")
+def login(body: LoginBody):
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM utilizadores WHERE email = %s", (body.email,)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        db.close()
+
+        if not user:
+            return {"erro": "Credenciais inválidas"}
+
+        if not pwd_context.verify(body.password[:72], user["password"]):
+            return {"erro": "Credenciais inválidas"}
+
+        return {
+            "status": "ok",
+            "id": user["id_utilizador"],
+            "nome": user["nome"],
+            "email": user["email"],
+        }
+
+    except Exception as e:
+        print(f"Erro login: {e}")
+        return {"erro": "Erro no servidor"}
+
+
+# ── Endpoint POST /registar (para criar o primeiro utilizador) ────────────────
+@app.post("/registar")
+def registar(body: LoginBody, nome: str = ""):
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        hashed = pwd_context.hash(body.password[:72])
+        cursor.execute(
+            "INSERT INTO utilizadores (email, password, nome) VALUES (%s, %s, %s)",
+            (body.email, hashed, nome)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"status": "ok"}
+    except mysql.connector.IntegrityError:
+        return {"erro": "Email já registado"}
+    except Exception as e:
+        print(f"Erro registar: {e}")
+        return (f"Erro registar: {e}")
 
 app.add_middleware(
     CORSMiddleware,

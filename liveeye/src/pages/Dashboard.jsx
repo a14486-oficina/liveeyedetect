@@ -3,6 +3,8 @@ import Sidebar from "../components/Sidebar";
 import AddPessoa from "../components/AddPessoa";
 import Desaparecidas from "../components/Desaparecidas";
 import Encontradas from "../components/Encontradas";
+import VideoCapture from "../components/VideoCapture";
+import Receiver from "./Receiver";
 
 const Dashboard = () => {
   const [panel, setPanel] = useState("add");
@@ -20,6 +22,9 @@ const Dashboard = () => {
     setSidebarOpen(false);
   };
 
+  // Receiver e Camera ocupam o ecrã completo (sem padding do dashboard)
+  const isFullscreen = panel === "receiver" || panel === "camera";
+
   return (
     <>
       <style>{`
@@ -28,13 +33,15 @@ const Dashboard = () => {
 
         .dash-sidebar { display: flex; }
         .dash-mobile-header { display: none; }
-        .dash-main { margin-left: 220px; padding: 48px 52px; }
+        .dash-main { margin-left: 220px; }
+        .dash-main.padded { padding: 48px 52px; }
         .dash-mobile-spacer { display: none; }
 
         @media (max-width: 768px) {
           .dash-sidebar { display: none; }
           .dash-mobile-header { display: flex; }
-          .dash-main { margin-left: 0 !important; padding: 20px 18px !important; }
+          .dash-main { margin-left: 0 !important; }
+          .dash-main.padded { padding: 20px 18px !important; }
           .dash-mobile-spacer { display: block; height: 60px; }
         }
 
@@ -89,14 +96,33 @@ const Dashboard = () => {
           <Sidebar active={panel} onNavigate={handleNavigate} counts={counts} />
         </div>
 
-        <main className="dash-main" style={{ flex: 1, minHeight: "100vh" }}>
+        {/* Main content */}
+        <main
+          className={`dash-main${isFullscreen ? "" : " padded"}`}
+          style={{ flex: 1, minHeight: "100vh" }}
+        >
           <div className="dash-mobile-spacer" />
-          {panel === "add" && <AddPessoa onSuccess={handleAddSuccess} />}
+
+          {panel === "add" && (
+            <AddPessoa onSuccess={handleAddSuccess} />
+          )}
           {panel === "missing" && (
-            <Desaparecidas key={refreshKey} onCountChange={(n) => setCounts((c) => ({ ...c, missing: n }))} />
+            <Desaparecidas
+              key={refreshKey}
+              onCountChange={(n) => setCounts((c) => ({ ...c, missing: n }))}
+            />
           )}
           {panel === "found" && (
-            <Encontradas key={refreshKey} onCountChange={(n) => setCounts((c) => ({ ...c, found: n }))} />
+            <Encontradas
+              key={refreshKey}
+              onCountChange={(n) => setCounts((c) => ({ ...c, found: n }))}
+            />
+          )}
+          {panel === "camera" && (
+            <VideoCapture />
+          )}
+          {panel === "receiver" && (
+            <Receiver />
           )}
         </main>
       </div>

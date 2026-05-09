@@ -1,7 +1,9 @@
 const NAV = [
-  { id: "add",     label: "Adicionar",    icon: "＋" },
-  { id: "missing", label: "Desaparecidas", icon: "◎" },
-  { id: "found",   label: "Encontradas",  icon: "✓" },
+  { id: "add",      label: "Adicionar",    icon: "＋" },
+  { id: "missing",  label: "Desaparecidas", icon: "◎" },
+  { id: "found",    label: "Encontradas",  icon: "✓" },
+  { id: "camera",   label: "Câmara",       icon: "⬤" },
+  { id: "receiver", label: "Receiver",     icon: "▶" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {
@@ -44,32 +46,32 @@ const Sidebar = ({ active, onNavigate, counts }) => {
       </div>
 
       {/* Nav */}
-      <nav style={{ padding: "14px 12px", flex: 1 }}>
-        {NAV.map((item) => {
-          const isActive = active === item.id;
-          return (
-            <button key={item.id} onClick={() => onNavigate(item.id)} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: "9px",
-              padding: "9px 12px", borderRadius: "7px", border: "none",
-              background: isActive ? "var(--accent-light)" : "transparent",
-              color: isActive ? "var(--accent)" : "var(--text-secondary)",
-              cursor: "pointer", marginBottom: "2px", transition: "all 0.12s",
-              textAlign: "left", fontFamily: "var(--font-sans)", fontSize: "13px",
-              fontWeight: isActive ? 500 : 400,
-            }}>
-              <span style={{ fontSize: "13px", width: "16px", textAlign: "center", opacity: 0.8 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {counts[item.id] > 0 && (
-                <span style={{
-                  fontSize: "10px", fontFamily: "var(--font-mono)",
-                  background: isActive ? "var(--accent-mid)" : "var(--bg-subtle)",
-                  color: isActive ? "var(--accent)" : "var(--text-muted)",
-                  padding: "2px 7px", borderRadius: "99px",
-                }}>{counts[item.id]}</span>
-              )}
-            </button>
-          );
-        })}
+      <nav style={{ padding: "14px 12px", flex: 1, overflowY: "auto" }}>
+
+        {/* Gestão */}
+        <p style={{
+          fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--text-muted)",
+          textTransform: "uppercase", letterSpacing: "0.12em",
+          padding: "0 10px", marginBottom: "6px", marginTop: "4px",
+        }}>Gestão</p>
+
+        {NAV.slice(0, 3).map((item) => (
+          <NavBtn key={item.id} item={item} active={active} onNavigate={onNavigate} counts={counts} />
+        ))}
+
+        {/* Divisor */}
+        <div style={{ height: "1px", background: "var(--border)", margin: "12px 4px" }} />
+
+        {/* Sistema */}
+        <p style={{
+          fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--text-muted)",
+          textTransform: "uppercase", letterSpacing: "0.12em",
+          padding: "0 10px", marginBottom: "6px",
+        }}>Sistema</p>
+
+        {NAV.slice(3).map((item) => (
+          <NavBtn key={item.id} item={item} active={active} onNavigate={onNavigate} counts={counts} />
+        ))}
       </nav>
 
       {/* Footer */}
@@ -80,6 +82,32 @@ const Sidebar = ({ active, onNavigate, counts }) => {
         }}>v1.0.0</span>
       </div>
     </aside>
+  );
+};
+
+const NavBtn = ({ item, active, onNavigate, counts }) => {
+  const isActive = active === item.id;
+  return (
+    <button onClick={() => onNavigate(item.id)} style={{
+      width: "100%", display: "flex", alignItems: "center", gap: "9px",
+      padding: "9px 12px", borderRadius: "7px", border: "none",
+      background: isActive ? "var(--accent-light)" : "transparent",
+      color: isActive ? "var(--accent)" : "var(--text-secondary)",
+      cursor: "pointer", marginBottom: "2px", transition: "all 0.12s",
+      textAlign: "left", fontFamily: "var(--font-sans)", fontSize: "13px",
+      fontWeight: isActive ? 500 : 400,
+    }}>
+      <span style={{ fontSize: "12px", width: "16px", textAlign: "center", opacity: 0.8 }}>{item.icon}</span>
+      <span style={{ flex: 1 }}>{item.label}</span>
+      {counts?.[item.id] > 0 && (
+        <span style={{
+          fontSize: "10px", fontFamily: "var(--font-mono)",
+          background: isActive ? "var(--accent-mid)" : "var(--bg-subtle)",
+          color: isActive ? "var(--accent)" : "var(--text-muted)",
+          padding: "2px 7px", borderRadius: "99px",
+        }}>{counts[item.id]}</span>
+      )}
+    </button>
   );
 };
 

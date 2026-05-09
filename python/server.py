@@ -272,6 +272,8 @@ from decimal import Decimal
 from typing import Optional
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import cv2
 import base64
 import numpy as np
@@ -280,7 +282,8 @@ import datetime
 import os
 import json
 import mysql.connector
-
+import smtplib
+import secrets
 
 load_dotenv()
 
@@ -377,6 +380,140 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_codigos_recuperacao: dict = {}
+ 
+# ── Schema para recuperação ───────────────────────────────────────────────
+class RecuperarPedirBody(BaseModel):
+    email: str
+ 
+class RecuperarVerificarBody(BaseModel):
+    email: str
+    codigo: str
+ 
+class RecuperarRedefinirBody(BaseModel):
+    email: str
+    codigo: str
+    nova_password: str
+ 
+ 
+def _enviar_email_codigo(destino: str, codigo: str, nome: str):
+    """Envia o email com o código de recuperação via Gmail SMTP."""
+    gmail_user = os.getenv("GMAIL_USER")
+    gmail_pass = os.getenv("GMAIL_APP_PASSWORD")
+ 
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "LiveEye — Código de recuperação de acesso"
+    msg["From"]    = f"LiveEye <{gmail_user}>"
+    msg["To"]      = destino
+ 
+    html = f"""
+    <div style="font-family: 'DM Sans', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f7f6f3; border-radius: 12px;">
+      <div style="background: #c0392b; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+        <span style="color: #fff; font-size: 18px;">◎</span>
+      </div>
+      <h2 style="color: #1a1916; font-size: 20px; margin: 0 0 8px;">Recuperação de acesso</h2>
+      <p style="color: #6b6760; font-size: 14px; margin: 0 0 24px;">Olá{f', {nome}' if nome else ''}! O teu código de recuperação é:</p>
+      <div style="background: #fff; border: 1px solid #e2e0d8; border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 24px;">
+        <span style="font-family: 'DM Mono', monospace; font-size: 36px; font-weight: 500; color: #c0392b; letter-spacing: 0.3em;">{codigo}</span>
+      </div>
+      <p style="color: #a8a49c; font-size: 12px; margin: 0;">
+        Este código expira em <strong>15 minutos</strong>.<br>
+        Se não pediste esta recuperação, ignora este email.
+      </p>
+    </div>
+    """
+ 
+    msg.attach(MIMEText(html, "html"))
+ 
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(gmail_user, gmail_pass)
+        server.sendmail(gmail_user, destino, msg.as_string())
+ 
+ 
+# ── POST /recuperar/pedir ─────────────────────────────────────────────────
+@app.post("/recuperar/pedir")
+def recuperar_pedir(body: RecuperarPedirBody):
+    try:
+        db     = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM utilizadores WHERE email = %s", (body.email,))
+        user = cursor.fetchone()
+        cursor.close()
+        db.close()
+ 
+        # Resposta genérica mesmo que o email não exista (segurança)
+        if not user:
+            return {"status": "ok"}
+ 
+        codigo  = str(secrets.randbelow(900000) + 100000)  # 6 dígitos
+        expires = datetime.datetime.now() + datetime.timedelta(minutes=15)
+ 
+        _codigos_recuperacao[body.email] = {"codigo": codigo, "expires": expires}
+ 
+        _enviar_email_codigo(body.email, codigo, user.get("nome", ""))
+        return {"status": "ok"}
+ 
+    except Exception as e:
+        print(f"Erro recuperar/pedir: {e}")
+        return {"erro": "Erro no servidor"}
+ 
+ 
+# ── POST /recuperar/verificar ─────────────────────────────────────────────
+@app.post("/recuperar/verificar")
+def recuperar_verificar(body: RecuperarVerificarBody):
+    entrada = _codigos_recuperacao.get(body.email)
+ 
+    if not entrada:
+        return {"erro": "Nenhum código pedido para este email"}
+ 
+    if datetime.datetime.now() > entrada["expires"]:
+        del _codigos_recuperacao[body.email]
+        return {"erro": "Código expirado. Pede um novo."}
+ 
+    if entrada["codigo"] != body.codigo:
+        return {"erro": "Código inválido"}
+ 
+    return {"status": "ok"}
+ 
+ 
+# ── POST /recuperar/redefinir ─────────────────────────────────────────────
+@app.post("/recuperar/redefinir")
+def recuperar_redefinir(body: RecuperarRedefinirBody):
+    entrada = _codigos_recuperacao.get(body.email)
+ 
+    if not entrada:
+        return {"erro": "Sessão de recuperação inválida"}
+ 
+    if datetime.datetime.now() > entrada["expires"]:
+        del _codigos_recuperacao[body.email]
+        return {"erro": "Código expirado. Pede um novo."}
+ 
+    if entrada["codigo"] != body.codigo:
+        return {"erro": "Código inválido"}
+ 
+    if len(body.nova_password) < 6:
+        return {"erro": "A palavra-passe deve ter pelo menos 6 caracteres"}
+ 
+    try:
+        hashed = pwd_context.hash(body.nova_password[:72])
+        db     = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE utilizadores SET password = %s WHERE email = %s",
+            (hashed, body.email)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+ 
+        # Apaga o código após uso
+        del _codigos_recuperacao[body.email]
+        return {"status": "ok"}
+ 
+    except Exception as e:
+        print(f"Erro recuperar/redefinir: {e}")
+        return {"erro": "Erro ao atualizar a palavra-passe"}
 
 # ── Utilitários ──────────────────────────────────────────────────────────────
 

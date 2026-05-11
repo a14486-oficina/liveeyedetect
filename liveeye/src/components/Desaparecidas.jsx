@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const API = "http://127.0.0.1:8000";
 
@@ -10,6 +10,188 @@ const s = {
   },
 };
 
+// ─── Leaflet loader (sem npm extra — carrega via CDN dinamicamente) ────────────
+let leafletReady = false;
+let leafletCallbacks = [];
+
+function loadLeaflet(cb) {
+  if (leafletReady) return cb();
+  leafletCallbacks.push(cb);
+  if (document.getElementById("leaflet-css")) return; // já a carregar
+
+  // CSS
+  const link = document.createElement("link");
+  link.id = "leaflet-css";
+  link.rel = "stylesheet";
+  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  document.head.appendChild(link);
+
+  // JS
+  const script = document.createElement("script");
+  script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  script.onload = () => {
+    // Fix ícones default (bug clássico Leaflet + bundlers)
+    const L = window.L;
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+      iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    });
+    leafletReady = true;
+    leafletCallbacks.forEach((fn) => fn());
+    leafletCallbacks = [];
+  };
+  document.head.appendChild(script);
+}
+
+// ─── Componente mapa ──────────────────────────────────────────────────────────
+const PersonMap = ({ homeCoords, localizacoes }) => {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const [ready, setReady] = useState(leafletReady);
+
+  useEffect(() => {
+    if (!ready) loadLeaflet(() => setReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !containerRef.current) return;
+    if (mapRef.current) return; // já inicializado
+
+    const L = window.L;
+    const hasHome = homeCoords?.lat != null && homeCoords?.lon != null;
+
+    // Ordena avistamentos cronologicamente (mais antigo → mais recente)
+    const parseDatetime = (loc) => {
+      if (!loc.data && !loc.hora) return 0;
+      // Suporta formato DD/MM/AAAA HH:MM
+      const [d, m, y] = (loc.data || "01/01/1970").split("/");
+      const [h, min] = (loc.hora || "00:00").split(":");
+      return new Date(`${y}-${m}-${d}T${h}:${min}:00`).getTime();
+    };
+
+    const sightings = (localizacoes || [])
+      .filter((l) => l.lat != null && l.lon != null)
+      .sort((a, b) => parseDatetime(a) - parseDatetime(b));
+
+    const center = hasHome
+      ? [homeCoords.lat, homeCoords.lon]
+      : sightings.length > 0
+      ? [sightings[0].lat, sightings[0].lon]
+      : [38.716, -9.139]; // Lisboa fallback
+
+    const map = L.map(containerRef.current, { zoomControl: true, scrollWheelZoom: false });
+    mapRef.current = map;
+
+    L.tileLayer("http://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+      attribution: "© OpenStreetMap",
+      maxZoom: 18,
+    }).addTo(map);
+
+    const bounds = [];
+
+    // Marcador casa
+    if (hasHome) {
+      const homeIcon = L.divIcon({
+        className: "",
+        html: `<div style="
+          width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+          background:var(--accent,#4f6ef7);border:3px solid #fff;
+          box-shadow:0 2px 8px rgba(0,0,0,0.35);
+        "></div>`,
+        iconSize: [28, 28], iconAnchor: [14, 28],
+      });
+      L.marker([homeCoords.lat, homeCoords.lon], { icon: homeIcon })
+        .addTo(map)
+        .bindPopup("<b>🏠 Residência</b>");
+      bounds.push([homeCoords.lat, homeCoords.lon]);
+    }
+
+    // Marcadores avistamentos + rastro
+    if (sightings.length > 0) {
+      const trailCoords = sightings.map((l) => [l.lat, l.lon]);
+
+      // Linha do rastro
+      L.polyline(
+        hasHome ? [[homeCoords.lat, homeCoords.lon], ...trailCoords] : trailCoords,
+        { color: "#f59e0b", weight: 2.5, dashArray: "6 5", opacity: 0.85 }
+      ).addTo(map);
+
+      sightings.forEach((loc, i) => {
+        const isLast = i === sightings.length - 1;
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="
+            width:${isLast ? 18 : 13}px;height:${isLast ? 18 : 13}px;
+            border-radius:50%;
+            background:${isLast ? "#f59e0b" : "#fbbf24"};
+            border:${isLast ? "3px" : "2px"} solid #fff;
+            box-shadow:0 1px 6px rgba(0,0,0,0.3);
+          "></div>`,
+          iconSize: [isLast ? 18 : 13, isLast ? 18 : 13],
+          iconAnchor: [isLast ? 9 : 6, isLast ? 9 : 6],
+        });
+        L.marker([loc.lat, loc.lon], { icon })
+          .addTo(map)
+          .bindPopup(`<b>${isLast ? "📍 Último avistamento" : `Avistamento ${i + 1}`}</b>${loc.data ? `<br>${loc.data}${loc.hora ? " " + loc.hora : ""}` : ""}`);
+        bounds.push([loc.lat, loc.lon]);
+      });
+    }
+
+    if (bounds.length > 1) {
+      map.fitBounds(L.latLngBounds(bounds).pad(0.25));
+    } else {
+      map.setView(center, 14);
+    }
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [ready, homeCoords, localizacoes]);
+
+  if (!ready) {
+    return (
+      <div style={{
+        height: "280px", borderRadius: "9px", border: "1px solid var(--border)",
+        background: "var(--bg-raised)", display: "flex", alignItems: "center",
+        justifyContent: "center", gap: "8px",
+        color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "12px",
+      }}>
+        <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◎</span>
+        A carregar mapa…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+        <span style={s.label}>Mapa de localização</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--accent,#4f6ef7)", display: "inline-block" }} />
+            Residência
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
+            Avistamentos
+          </span>
+        </div>
+      </div>
+      <div
+        ref={containerRef}
+        style={{
+          height: "400px", borderRadius: "9px", overflow: "hidden",
+          border: "1px solid var(--border)", zIndex: 0,
+        }}
+      />
+    </div>
+  );
+};
+
+// ─── Galeria de fotos ─────────────────────────────────────────────────────────
 const PhotoGallery = ({ imagens }) => {
   const [selected, setSelected] = useState(0);
   if (!imagens || imagens.length === 0) return null;
@@ -19,14 +201,13 @@ const PhotoGallery = ({ imagens }) => {
       <span style={{ ...s.label, display: "block", marginBottom: "10px" }}>
         Fotografias ({imagens.length})
       </span>
-      <div style={{
-        width: "100%", borderRadius: "9px", overflow: "hidden",
-        border: "1px solid var(--border)", marginBottom: "10px",
-        background: "var(--bg-raised)", maxHeight: "650px",
-        display: "flex", alignItems: "center", justifyContent: "center",
+      <div style={{width: "100%", borderRadius: "9px", overflow: "hidden", border: "1px solid var(--border)", marginBottom: "10px",background: "var(--bg-raised)", maxHeight: "800px",display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <img src={`data:image/jpeg;base64,${imagens[selected]}`} alt={`Foto ${selected + 1}`}
-          style={{ width: "100%", maxHeight: "650px", objectFit: "cover", display: "block" }} />
+        <img
+          src={`data:image/jpeg;base64,${imagens[selected]}`}
+          alt={`Foto ${selected + 1}`}
+          style={{ width: "100%", maxHeight: "650px", objectFit: "cover", display: "block" }}
+        />
       </div>
       {imagens.length > 1 && (
         <div style={{ display: "flex", gap: "8px" }}>
@@ -34,12 +215,15 @@ const PhotoGallery = ({ imagens }) => {
             <button key={i} onClick={() => setSelected(i)} style={{
               flex: "1 1 0", aspectRatio: "1 / 1", padding: 0, border: "none",
               borderRadius: "7px", overflow: "hidden", cursor: "pointer",
-              outline: selected === i ? `2px solid var(--accent)` : "2px solid transparent",
+              outline: selected === i ? "2px solid var(--accent)" : "2px solid transparent",
               outlineOffset: "2px", transition: "opacity 0.15s, outline-color 0.15s",
               opacity: selected === i ? 1 : 0.5,
             }}>
-              <img src={`data:image/jpeg;base64,${b64}`} alt={`Miniatura ${i + 1}`}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img
+                src={`data:image/jpeg;base64,${b64}`}
+                alt={`Miniatura ${i + 1}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
             </button>
           ))}
         </div>
@@ -48,6 +232,7 @@ const PhotoGallery = ({ imagens }) => {
   );
 };
 
+// ─── Linha de pessoa ──────────────────────────────────────────────────────────
 const PersonRow = ({ pessoa, onFoundSuccess }) => {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
@@ -97,6 +282,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
       borderRadius: "10px", marginBottom: "6px", overflow: "hidden",
       boxShadow: "var(--shadow-sm)",
     }}>
+      {/* Cabeçalho da linha */}
       <div style={{ padding: "13px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
         <button onClick={toggleOpen} style={{
           flex: 1, display: "flex", alignItems: "center", gap: "9px",
@@ -130,6 +316,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
         </div>
       </div>
 
+      {/* Formulário nova localização */}
       {addingLoc && (
         <div style={{ padding: "13px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-raised)" }}>
           <p style={{ ...s.label, marginBottom: "10px" }}>Nova localização</p>
@@ -148,6 +335,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
         </div>
       )}
 
+      {/* Detalhes expandidos */}
       {open && (
         <div style={{
           padding: "16px 16px 18px", borderTop: "1px solid var(--border)",
@@ -161,6 +349,13 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
             <>
               <PhotoGallery imagens={details.imagens_b64} />
 
+              {/* ── MAPA ── */}
+              <PersonMap
+                homeCoords={details.local_de_residencia}
+                localizacoes={details.localizacoes}
+              />
+
+              {/* Grelha de info */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "14px" }}>
                 {[
                   ["Idade", `${details.idade} anos`],
@@ -177,6 +372,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
                 ))}
               </div>
 
+              {/* Observações */}
               {details.observacoes && (
                 <div style={{
                   background: "var(--bg-raised)", borderRadius: "7px", padding: "12px 13px",
@@ -189,6 +385,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
                 </div>
               )}
 
+              {/* Histórico de localizações */}
               <p style={{ ...s.label, marginBottom: "10px" }}>Histórico de localizações</p>
               {details.localizacoes?.length > 0 ? (
                 <div style={{
@@ -224,6 +421,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
   );
 };
 
+// ─── Ecrã principal ───────────────────────────────────────────────────────────
 const Desaparecidas = ({ onCountChange }) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -286,6 +484,8 @@ const Desaparecidas = ({ onCountChange }) => {
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .leaflet-container { font-family: var(--font-sans) !important; }
       `}</style>
     </div>
   );

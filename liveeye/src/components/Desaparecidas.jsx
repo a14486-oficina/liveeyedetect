@@ -191,34 +191,115 @@ const PersonMap = ({ homeCoords, localizacoes }) => {
   );
 };
 
-// ─── Galeria de fotos ─────────────────────────────────────────────────────────
-const PhotoGallery = ({ imagens }) => {
-  const [selected, setSelected] = useState(0);
-  if (!imagens || imagens.length === 0) return null;
+// ─── Lightbox (pop-up de fotografia) ─────────────────────────────────────────
+const Lightbox = ({ imagens, index, onClose, onPrev, onNext }) => {
+  // Fechar com Escape, navegar com setas
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") onPrev();
+      if (e.key === "ArrowRight") onNext();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose, onPrev, onNext]);
 
   return (
-    <div style={{ marginBottom: "20px" }}>
-      <span style={{ ...s.label, display: "block", marginBottom: "10px" }}>
-        Fotografias ({imagens.length})
-      </span>
-      <div style={{width: "100%", borderRadius: "9px", overflow: "hidden", border: "1px solid var(--border)", marginBottom: "10px",background: "var(--bg-raised)", maxHeight: "800px",display: "flex", alignItems: "center", justifyContent: "center",
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        animation: "fadeIn 0.18s ease",
+      }}
+    >
+      {/* Botão fechar */}
+      <button
+        onClick={onClose}
+        style={{
+          position: "fixed", top: "18px", right: "22px",
+          background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: "50%", width: "38px", height: "38px",
+          color: "#fff", fontSize: "18px", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          lineHeight: 1, zIndex: 1001,
+        }}
+      >✕</button>
+
+      {/* Contador */}
+      <div style={{
+        position: "fixed", top: "22px", left: "50%", transform: "translateX(-50%)",
+        fontFamily: "var(--font-mono)", fontSize: "11px", color: "rgba(255,255,255,0.55)",
+        letterSpacing: "0.1em", zIndex: 1001,
       }}>
-        <img
-          src={`data:image/jpeg;base64,${imagens[selected]}`}
-          alt={`Foto ${selected + 1}`}
-          style={{ width: "100%", maxHeight: "650px", objectFit: "cover", display: "block" }}
-        />
+        {index + 1} / {imagens.length}
       </div>
+
+      {/* Seta esquerda */}
       {imagens.length > 1 && (
-        <div style={{ display: "flex", gap: "8px" }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          style={{
+            position: "fixed", left: "16px", top: "50%", transform: "translateY(-50%)",
+            background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: "50%", width: "42px", height: "42px",
+            color: "#fff", fontSize: "18px", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1001, transition: "background 0.15s",
+          }}
+        >‹</button>
+      )}
+
+      {/* Imagem principal */}
+      <img
+        src={`data:image/jpeg;base64,${imagens[index]}`}
+        alt={`Foto ${index + 1}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw", maxHeight: "88vh",
+          borderRadius: "10px", objectFit: "contain",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+          display: "block",
+        }}
+      />
+
+      {/* Seta direita */}
+      {imagens.length > 1 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNext(); }}
+          style={{
+            position: "fixed", right: "16px", top: "50%", transform: "translateY(-50%)",
+            background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: "50%", width: "42px", height: "42px",
+            color: "#fff", fontSize: "18px", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1001, transition: "background 0.15s",
+          }}
+        >›</button>
+      )}
+
+      {/* Miniaturas em baixo */}
+      {imagens.length > 1 && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed", bottom: "20px", left: "50%", transform: "translateX(-50%)",
+            display: "flex", gap: "8px", zIndex: 1001,
+          }}
+        >
           {imagens.map((b64, i) => (
-            <button key={i} onClick={() => setSelected(i)} style={{
-              flex: "1 1 0", aspectRatio: "1 / 1", padding: 0, border: "none",
-              borderRadius: "7px", overflow: "hidden", cursor: "pointer",
-              outline: selected === i ? "2px solid var(--accent)" : "2px solid transparent",
-              outlineOffset: "2px", transition: "opacity 0.15s, outline-color 0.15s",
-              opacity: selected === i ? 1 : 0.5,
-            }}>
+            <button
+              key={i}
+              onClick={() => onPrev(i) /* reutilizamos onPrev com índice direto via wrapper */}
+              style={{
+                width: "48px", height: "48px", padding: 0, border: "none",
+                borderRadius: "6px", overflow: "hidden", cursor: "pointer",
+                outline: i === index ? "2px solid #fff" : "2px solid transparent",
+                outlineOffset: "2px", opacity: i === index ? 1 : 0.45,
+                transition: "opacity 0.15s, outline-color 0.15s",
+              }}
+            >
               <img
                 src={`data:image/jpeg;base64,${b64}`}
                 alt={`Miniatura ${i + 1}`}
@@ -227,6 +308,70 @@ const PhotoGallery = ({ imagens }) => {
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Galeria de fotos ─────────────────────────────────────────────────────────
+const PhotoGallery = ({ imagens }) => {
+  const [lightboxIndex, setLightboxIndex] = useState(null); // null = fechado
+
+  if (!imagens || imagens.length === 0) return null;
+
+  const open = (i) => setLightboxIndex(i);
+  const close = () => setLightboxIndex(null);
+  const prev = (i) => {
+    if (typeof i === "number") { setLightboxIndex(i); return; }
+    setLightboxIndex((idx) => (idx - 1 + imagens.length) % imagens.length);
+  };
+  const next = () => setLightboxIndex((idx) => (idx + 1) % imagens.length);
+
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <span style={{ ...s.label, display: "block", marginBottom: "10px" }}>
+        Fotografias ({imagens.length})
+      </span>
+
+      {/* Grelha de miniaturas clicáveis */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${Math.min(imagens.length, 4)}, 1fr)`,
+        gap: "8px",
+      }}>
+        {imagens.map((b64, i) => (
+          <button
+            key={i}
+            onClick={() => open(i)}
+            title="Clique para ampliar"
+            style={{
+              aspectRatio: "1 / 1", padding: 0, border: "none",
+              borderRadius: "8px", overflow: "hidden", cursor: "zoom-in",
+              background: "var(--bg-raised)",
+              outline: "2px solid transparent", outlineOffset: "2px",
+              transition: "outline-color 0.15s, opacity 0.15s, transform 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.outlineColor = "var(--accent)"; e.currentTarget.style.transform = "scale(1.03)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.outlineColor = "transparent"; e.currentTarget.style.transform = "scale(1)"; }}
+          >
+            <img
+              src={`data:image/jpeg;base64,${b64}`}
+              alt={`Foto ${i + 1}`}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          </button>
+        ))}
+      </div>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <Lightbox
+          imagens={imagens}
+          index={lightboxIndex}
+          onClose={close}
+          onPrev={prev}
+          onNext={next}
+        />
       )}
     </div>
   );

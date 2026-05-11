@@ -2,8 +2,8 @@ const NAV = [
   { id: "add",      label: "Adicionar",    icon: "＋" },
   { id: "missing",  label: "Desaparecidas", icon: "◎" },
   { id: "found",    label: "Encontradas",  icon: "✓" },
-  { id: "camera",   label: "Câmara",       icon: "⬤" },
-  { id: "receiver", label: "Receiver",     icon: "▶" },
+  { id: "camera",   label: "Emissor",       icon: "⬤" },
+  { id: "receiver", label: "Recetor",     icon: "▶" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {

@@ -192,26 +192,81 @@ const PersonMap = ({ homeCoords, localizacoes }) => {
 };
 
 // ─── Lightbox (pop-up de fotografia) ─────────────────────────────────────────
+const ZOOM_SCALE = 2.5;
+
 const Lightbox = ({ imagens, index, onClose, onPrev, onNext }) => {
-  // Fechar com Escape, navegar com setas
+  const imgRef = useRef(null);
+  const [zoomed, setZoomed] = useState(false);
+  const [origin, setOrigin] = useState({ x: 50, y: 50 }); // transform-origin em %
+  const isDragging = useRef(false);
+  const dragStart = useRef({ mx: 0, my: 0, ox: 50, oy: 50 });
+
+  // Reset zoom ao mudar imagem
+  useEffect(() => {
+    setZoomed(false);
+    setOrigin({ x: 50, y: 50 });
+  }, [index]);
+
+  // Teclas
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft") onPrev();
-      if (e.key === "ArrowRight") onNext();
+      if (e.key === "Escape") { if (zoomed) setZoomed(false); else onClose(); }
+      if (!zoomed && e.key === "ArrowLeft") onPrev();
+      if (!zoomed && e.key === "ArrowRight") onNext();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, onPrev, onNext]);
+  }, [onClose, onPrev, onNext, zoomed]);
+
+  const getPct = (e, el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)),
+      y: Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)),
+    };
+  };
+
+  const handleImgClick = (e) => {
+    e.stopPropagation();
+    if (!zoomed) {
+      setOrigin(getPct(e, e.currentTarget));
+      setZoomed(true);
+    } else {
+      setZoomed(false);
+    }
+  };
+
+  const handleMouseDown = (e) => {
+    if (!zoomed) return;
+    e.preventDefault();
+    isDragging.current = true;
+    dragStart.current = { mx: e.clientX, my: e.clientY, ox: origin.x, oy: origin.y };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!zoomed || !isDragging.current || !imgRef.current) return;
+    const r = imgRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - dragStart.current.mx) / r.width) * 100 / ZOOM_SCALE * 2;
+    const dy = ((e.clientY - dragStart.current.my) / r.height) * 100 / ZOOM_SCALE * 2;
+    setOrigin({
+      x: Math.max(0, Math.min(100, dragStart.current.ox - dx)),
+      y: Math.max(0, Math.min(100, dragStart.current.oy - dy)),
+    });
+  };
+
+  const handleMouseUp = () => { isDragging.current = false; };
 
   return (
     <div
-      onClick={onClose}
+      onClick={zoomed ? undefined : onClose}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)",
+        background: "rgba(0,0,0,0.88)", backdropFilter: "blur(6px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         animation: "fadeIn 0.18s ease",
+        userSelect: "none",
       }}
     >
       {/* Botão fechar */}
@@ -223,75 +278,93 @@ const Lightbox = ({ imagens, index, onClose, onPrev, onNext }) => {
           borderRadius: "50%", width: "38px", height: "38px",
           color: "#fff", fontSize: "18px", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          lineHeight: 1, zIndex: 1001,
+          lineHeight: 1, zIndex: 1002,
         }}
       >✕</button>
 
-      {/* Contador */}
+      {/* Contador + dica */}
       <div style={{
         position: "fixed", top: "22px", left: "50%", transform: "translateX(-50%)",
         fontFamily: "var(--font-mono)", fontSize: "11px", color: "rgba(255,255,255,0.55)",
-        letterSpacing: "0.1em", zIndex: 1001,
+        letterSpacing: "0.08em", zIndex: 1002, textAlign: "center", whiteSpace: "nowrap",
       }}>
         {index + 1} / {imagens.length}
+        <span style={{ marginLeft: "12px", opacity: 0.6 }}>
+          {zoomed ? "Arraste para mover · clique para sair do zoom" : "Clique na imagem para zoom"}
+        </span>
       </div>
 
-      {/* Seta esquerda */}
-      {imagens.length > 1 && (
+      {/* Setas (escondem no zoom) */}
+      {imagens.length > 1 && !zoomed && (
         <button
           onClick={(e) => { e.stopPropagation(); onPrev(); }}
           style={{
             position: "fixed", left: "16px", top: "50%", transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
             borderRadius: "50%", width: "42px", height: "42px",
-            color: "#fff", fontSize: "18px", cursor: "pointer",
+            color: "#fff", fontSize: "22px", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 1001, transition: "background 0.15s",
+            zIndex: 1002,
           }}
         >‹</button>
       )}
 
-      {/* Imagem principal */}
-      <img
-        src={`data:image/jpeg;base64,${imagens[index]}`}
-        alt={`Foto ${index + 1}`}
-        onClick={(e) => e.stopPropagation()}
+      {/* Contentor com overflow hidden para o zoom não vazar */}
+      <div
         style={{
           maxWidth: "90vw", maxHeight: "88vh",
-          borderRadius: "10px", objectFit: "contain",
+          overflow: zoomed ? "hidden" : "visible",
+          borderRadius: "10px",
           boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
-          display: "block",
         }}
-      />
+        onClick={(e) => e.stopPropagation()}
+      >
+        <img
+          ref={imgRef}
+          src={`data:image/jpeg;base64,${imagens[index]}`}
+          alt={`Foto ${index + 1}`}
+          draggable={false}
+          onMouseDown={handleMouseDown}
+          onClick={handleImgClick}
+          style={{
+            maxWidth: "90vw", maxHeight: "88vh",
+            objectFit: "contain", display: "block",
+            borderRadius: "10px",
+            transform: zoomed ? `scale(${ZOOM_SCALE})` : "scale(1)",
+            transformOrigin: `${origin.x}% ${origin.y}%`,
+            transition: isDragging.current ? "none" : "transform 0.25s ease",
+            cursor: zoomed ? (isDragging.current ? "grabbing" : "grab") : "zoom-in",
+          }}
+        />
+      </div>
 
-      {/* Seta direita */}
-      {imagens.length > 1 && (
+      {imagens.length > 1 && !zoomed && (
         <button
           onClick={(e) => { e.stopPropagation(); onNext(); }}
           style={{
             position: "fixed", right: "16px", top: "50%", transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
             borderRadius: "50%", width: "42px", height: "42px",
-            color: "#fff", fontSize: "18px", cursor: "pointer",
+            color: "#fff", fontSize: "22px", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 1001, transition: "background 0.15s",
+            zIndex: 1002,
           }}
         >›</button>
       )}
 
-      {/* Miniaturas em baixo */}
-      {imagens.length > 1 && (
+      {/* Miniaturas em baixo (escondem no zoom) */}
+      {imagens.length > 1 && !zoomed && (
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
             position: "fixed", bottom: "20px", left: "50%", transform: "translateX(-50%)",
-            display: "flex", gap: "8px", zIndex: 1001,
+            display: "flex", gap: "8px", zIndex: 1002,
           }}
         >
           {imagens.map((b64, i) => (
             <button
               key={i}
-              onClick={() => onPrev(i) /* reutilizamos onPrev com índice direto via wrapper */}
+              onClick={() => onPrev(i)}
               style={{
                 width: "48px", height: "48px", padding: 0, border: "none",
                 borderRadius: "6px", overflow: "hidden", cursor: "pointer",

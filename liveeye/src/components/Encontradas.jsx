@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = "http://127.0.0.1:8000";
+const API = "http://192.168.1.130:8000";
 
 const Encontradas = ({ onCountChange }) => {
   const [pessoas, setPessoas] = useState([]);

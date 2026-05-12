@@ -1,26 +1,20 @@
 import { useState, useEffect } from "react";
 
-const API = "http://192.168.1.130:8000";
+const API = "http://localhost:8000";
 
 const Encontradas = ({ onCountChange }) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
 
   const carregar = async () => {
     setLoading(true);
-    setLoadError("");
     try {
       const res = await fetch(`${API}/pessoas_listar_encontradas`);
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json();
       setPessoas(data);
       onCountChange(data.length);
-    } catch (e) {
-      setLoadError(e.message || "Não foi possível carregar a lista. Verifica a ligação ao servidor.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* silent */ }
+    setLoading(false);
   };
 
   useEffect(() => { carregar(); }, []);
@@ -53,21 +47,6 @@ const Encontradas = ({ onCountChange }) => {
 
       {loading ? (
         <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "13px" }}>A carregar...</p>
-      ) : loadError ? (
-        <div style={{
-          padding: "16px 20px", background: "var(--accent-light)",
-          border: "1px solid var(--accent-border)", borderRadius: "9px",
-          display: "flex", alignItems: "center", gap: "12px",
-        }}>
-          <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: "13px", flex: 1 }}>
-            ⚠ {loadError}
-          </span>
-          <button onClick={carregar} style={{
-            background: "var(--accent)", border: "none", borderRadius: "6px",
-            color: "#fff", fontSize: "12px", padding: "6px 14px",
-            cursor: "pointer", fontFamily: "var(--font-sans)", fontWeight: 500,
-          }}>Tentar novamente</button>
-        </div>
       ) : pessoas.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-muted)" }}>
           <div style={{ fontSize: "26px", marginBottom: "12px" }}>✓</div>

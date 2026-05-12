@@ -281,7 +281,6 @@ import face_recognition
 import datetime
 import os
 import json
-import mysql.connector
 import smtplib
 import secrets
 
@@ -299,15 +298,22 @@ model = YOLO("yolo26n.pt")
 # ── Configuração da password hash ─────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ── Ligação ao MySQL ──────────────────────────────────────────────────────────
+import mysql.connector.pooling
+
+# ── Pool de ligações MySQL (partilhado por todos os pedidos) ──────────────────
+_db_pool = mysql.connector.pooling.MySQLConnectionPool(
+    pool_name="liveeye_pool",
+    pool_size=5,
+    host="localhost",
+    port=3306,
+    user=os.getenv("MySQL_USER"),
+    password=os.getenv("MySQL_PASSWORD"),
+    database="liveeyedetect",
+)
+
 def get_db():
-    return mysql.connector.connect(
-        host="localhost",
-        port=3306,
-        user=os.getenv("MySQL_USER"),
-        password=os.getenv("MySQL_PASSWORD"),           
-        database="liveeyedetect"
-    )
+    """Devolve uma conexão do pool. Usar sempre com 'with' ou fechar manualmente."""
+    return _db_pool.get_connection()
 
 # ── Schema do body do login ───────────────────────────────────────────────────
 class LoginBody(BaseModel):
@@ -360,11 +366,11 @@ def registar(body: LoginBody, nome: str = ""):
         cursor.close()
         db.close()
         return {"status": "ok"}
-    except mysql.connector.IntegrityError:
-        return {"erro": "Email já registado"}
     except Exception as e:
+        if "Duplicate entry" in str(e) or "1062" in str(e):
+            return {"erro": "Email já registado"}
         print(f"Erro registar: {e}")
-        return (f"Erro registar: {e}")
+        return {"erro": "Erro interno ao criar conta"}
 
 app.add_middleware(
     CORSMiddleware,

@@ -457,34 +457,59 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
   const [newLoc, setNewLoc] = useState({ lat: "", lon: "", data: "", hora: "" });
+  const [rowError, setRowError] = useState("");
 
   const toggleOpen = async () => {
     if (!open && !details) {
       setLoadingDetails(true);
+      setRowError("");
       try {
         const res = await fetch(`${API}/pessoas/${pessoa.id}`);
-        setDetails(await res.json());
-      } catch { /* silent */ }
-      setLoadingDetails(false);
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        const json = await res.json();
+        if (json.erro) throw new Error(json.erro);
+        setDetails(json);
+      } catch (e) {
+        setRowError(e.message || "Não foi possível carregar os detalhes.");
+      } finally {
+        setLoadingDetails(false);
+      }
     }
     setOpen((o) => !o);
   };
 
   const marcarEncontrada = async () => {
     if (!confirm("Confirmas que esta pessoa foi encontrada?")) return;
-    const res = await fetch(`${API}/pessoas/${pessoa.id}/estado`, { method: "POST" });
-    if (res.ok) onFoundSuccess(pessoa.id);
+    try {
+      const res = await fetch(`${API}/pessoas/${pessoa.id}/estado`, { method: "POST" });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      onFoundSuccess(pessoa.id);
+    } catch (e) {
+      setRowError(e.message || "Não foi possível atualizar o estado.");
+    }
   };
 
   const submitLoc = async () => {
-    if (!newLoc.lat || !newLoc.lon) return;
-    const url = `${API}/pessoas/${pessoa.id}/localizacao?lat=${parseFloat(newLoc.lat)}&lon=${parseFloat(newLoc.lon)}&data=${encodeURIComponent(newLoc.data)}&hora=${encodeURIComponent(newLoc.hora)}`;
-    const res = await fetch(url, { method: "POST" });
-    if (res.ok) {
+    const lat = parseFloat(newLoc.lat);
+    const lon = parseFloat(newLoc.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+
+    // Validação opcional de data (DD/MM/AAAA) e hora (HH:MM)
+    const dataOk = !newLoc.data || /^\d{2}\/\d{2}\/\d{4}$/.test(newLoc.data);
+    const horaOk = !newLoc.hora || /^\d{2}:\d{2}$/.test(newLoc.hora);
+    if (!dataOk || !horaOk) return;
+
+    const url = `${API}/pessoas/${pessoa.id}/localizacao?lat=${lat}&lon=${lon}&data=${encodeURIComponent(newLoc.data)}&hora=${encodeURIComponent(newLoc.hora)}`;
+    try {
+      const res = await fetch(url, { method: "POST" });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
       setAddingLoc(false);
       setNewLoc({ lat: "", lon: "", data: "", hora: "" });
       const r2 = await fetch(`${API}/pessoas/${pessoa.id}`);
       setDetails(await r2.json());
+    } catch (e) {
+      setRowError(e.message || "Não foi possível guardar a localização.");
     }
   };
 
@@ -534,7 +559,22 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
         </div>
       </div>
 
-      {/* Formulário nova localização */}
+      {/* Erro de operação */}
+      {rowError && (
+        <div style={{
+          margin: "0 16px 10px", padding: "8px 12px",
+          background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+          borderRadius: "6px", color: "var(--accent)",
+          fontSize: "12px", fontFamily: "var(--font-mono)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+        }}>
+          <span>⚠ {rowError}</span>
+          <button onClick={() => setRowError("")} style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--accent)", fontSize: "14px", lineHeight: 1, padding: 0,
+          }}>✕</button>
+        </div>
+      )}
       {addingLoc && (
         <div style={{ padding: "13px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-raised)" }}>
           <p style={{ ...s.label, marginBottom: "10px" }}>Nova localização</p>
@@ -643,16 +683,22 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
 const Desaparecidas = ({ onCountChange }) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const carregar = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await fetch(`${API}/pessoas_listar`);
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json();
       setPessoas(data);
       if (typeof onCountChange === "function") onCountChange(data.length);
-    } catch { /* silent */ }
-    setLoading(false);
+    } catch (e) {
+      setLoadError(e.message || "Não foi possível carregar a lista. Verifica a ligação ao servidor.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { carregar(); }, []);
@@ -689,6 +735,21 @@ const Desaparecidas = ({ onCountChange }) => {
 
       {loading ? (
         <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "13px" }}>A carregar...</p>
+      ) : loadError ? (
+        <div style={{
+          padding: "16px 20px", background: "var(--accent-light)",
+          border: "1px solid var(--accent-border)", borderRadius: "9px",
+          display: "flex", alignItems: "center", gap: "12px",
+        }}>
+          <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: "13px", flex: 1 }}>
+            ⚠ {loadError}
+          </span>
+          <button onClick={carregar} style={{
+            background: "var(--accent)", border: "none", borderRadius: "6px",
+            color: "#fff", fontSize: "12px", padding: "6px 14px",
+            cursor: "pointer", fontFamily: "var(--font-sans)", fontWeight: 500,
+          }}>Tentar novamente</button>
+        </div>
       ) : pessoas.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-muted)" }}>
           <div style={{ fontSize: "28px", marginBottom: "12px" }}>◎</div>

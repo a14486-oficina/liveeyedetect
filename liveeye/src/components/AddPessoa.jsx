@@ -100,7 +100,7 @@ const AddPessoa = ({ onSuccess }) => {
     if (!form.idade || isNaN(idade) || idade <= 0) return "Idade inválida";
     if (!form.sexo) return "Seleciona um sexo";
     if (form.sexo === "Outro" && !form.sexoOutro.trim()) return "Especifica o sexo";
-    if (!form.lat || !form.lon || isNaN(form.lat) || isNaN(form.lon)) return "Coordenadas inválidas";
+    if (!form.lat || !form.lon || !Number.isFinite(parseFloat(form.lat)) || !Number.isFinite(parseFloat(form.lon))) return "Coordenadas inválidas";
     if (parseFloat(form.lat) < -90 || parseFloat(form.lat) > 90) return "Latitude entre -90 e 90";
     if (parseFloat(form.lon) < -180 || parseFloat(form.lon) > 180) return "Longitude entre -180 e 180";
     if (!fotos[0]) return "A primeira fotografia é obrigatória";

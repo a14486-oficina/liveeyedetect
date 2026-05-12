@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SESSION_TTL_MS } from "../components/AuthGuard";
 
 const API = "http://192.168.1.130:8000";
+
+/** Guarda a sessão em localStorage com TTL de SESSION_TTL_MS. */
+const saveSession = (data) => {
+  localStorage.setItem("liveeye_user", JSON.stringify({
+    user: { id: data.id, nome: data.nome, email: data.email },
+    expiresAt: Date.now() + SESSION_TTL_MS,
+  }));
+};
 
 /* ── Estilos partilhados ─────────────────────────────────────────────────── */
 const s = {
@@ -90,7 +99,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
       });
       const data = await res.json();
       if (!res.ok || data.erro) { setError(data.erro || "Credenciais inválidas."); return; }
-      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email }));
+      saveSession(data);
       navigate("/dashboard");
     } catch {
       setError("Não foi possível ligar ao servidor.");
@@ -188,7 +197,7 @@ const PainelRegisto = ({ onBack }) => {
       });
       const dataLogin = await resLogin.json();
       if (dataLogin.id) {
-        sessionStorage.setItem("liveeye_user", JSON.stringify({ id: dataLogin.id, nome: dataLogin.nome, email: dataLogin.email }));
+        saveSession(dataLogin);
         navigate("/dashboard");
       } else { onBack(); }
     } catch {

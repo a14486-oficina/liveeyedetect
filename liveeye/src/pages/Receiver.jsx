@@ -235,7 +235,7 @@ const Receiver = () => {
       `}</style>
 
       <div style={{
-        minHeight: "100svh", display: "flex", flexDirection: "column",
+        display: "flex", flexDirection: "column",
         background: "var(--bg)", fontFamily: "var(--font-sans)",
       }}>
 
@@ -247,63 +247,6 @@ const Receiver = () => {
           }} />
         )}
 
-        {/* Header */}
-        <header style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "14px 28px",
-          background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{
-              width: "26px", height: "26px", borderRadius: "6px",
-              background: "var(--accent)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", color: "#fff",
-            }}>◎</div>
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)" }}>
-              LiveEye{" "}
-              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>/ Receiver</span>
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-            {/* FPS */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>FPS</span>
-              <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
-            </div>
-
-            {/* Detections */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Deteções</span>
-              <span style={{
-                fontSize: "13px", fontWeight: 500, fontFamily: "var(--font-mono)",
-                color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)",
-              }}>{detections.length}</span>
-            </div>
-
-            {/* Status */}
-            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-              <div style={{ position: "relative", width: "8px", height: "8px" }}>
-                <div style={{
-                  width: "8px", height: "8px", borderRadius: "50%",
-                  background: connected ? "var(--success)" : "var(--accent)",
-                }} />
-                {connected && (
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: "50%",
-                    background: "var(--success)",
-                    animation: "pulse-ring 1.5s ease-out infinite",
-                  }} />
-                )}
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                {status}
-              </span>
-            </div>
-          </div>
-        </header>
-
         {/* Main */}
         <main style={{ flex: 1, display: "flex", gap: "20px", padding: "20px" }}>
 
@@ -314,7 +257,7 @@ const Receiver = () => {
               background: "var(--bg-raised)", border: "1px solid var(--border)",
               boxShadow: "var(--shadow-md)",
               aspectRatio: "9/16",
-              height: "calc(100svh - 100px)",
+              height: "calc(100svh - 140px)",
               width: "auto",
             }}>
 
@@ -387,6 +330,47 @@ const Receiver = () => {
 
           {/* Side panel */}
           <div style={{ width: "240px", display: "flex", flexDirection: "column", gap: "12px", flexShrink: 0 }}>
+
+            {/* Status bar (previously in header) */}
+            <div style={{
+              borderRadius: "10px", padding: "12px 16px",
+              background: "var(--bg-surface)", border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              {/* FPS */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>FPS</span>
+                <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
+              </div>
+              {/* Detections */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Deteções</span>
+                <span style={{
+                  fontSize: "13px", fontWeight: 500, fontFamily: "var(--font-mono)",
+                  color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)",
+                }}>{detections.length}</span>
+              </div>
+              {/* Status dot */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <div style={{ position: "relative", width: "8px", height: "8px" }}>
+                  <div style={{
+                    width: "8px", height: "8px", borderRadius: "50%",
+                    background: connected ? "var(--success)" : "var(--accent)",
+                  }} />
+                  {connected && (
+                    <div style={{
+                      position: "absolute", inset: 0, borderRadius: "50%",
+                      background: "var(--success)",
+                      animation: "pulse-ring 1.5s ease-out infinite",
+                    }} />
+                  )}
+                </div>
+                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+                  {status}
+                </span>
+              </div>
+            </div>
 
             {/* Live detections */}
             <div style={{

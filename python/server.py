@@ -1,267 +1,3 @@
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
-"""
-from ultralytics import YOLO
-import cv2
-import base64
-import numpy as np
-from fastapi import FastAPI, WebSocket
-
-app = FastAPI()
-model = YOLO("yolo26n.pt")
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-
-    while True:
-        data = await ws.receive_text()
-
-        # converter base64 → imagem
-        img_bytes = base64.b64decode(data.split(",")[1])
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        results = model(frame)[0]
-
-        detections = []
-
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-
-            detections.append({
-                "x": x1,
-                "y": y1,
-                "w": x2 - x1,
-                "h": y2 - y1,
-                "conf": conf,
-                "cls": cls
-            })
-
-        await ws.send_json(detections)
-
-*/
-"""
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
@@ -309,12 +45,173 @@ def get_db():
         database="liveeyedetect"
     )
 
+# ── Schema para atualizar perfil ─────────────────────────────────────────────
+class AtualizarPerfilBody(BaseModel):
+    id_utilizador: int
+    nome: str
+    email: str
+ 
+ 
+# ── POST /atualizar_perfil ────────────────────────────────────────────────────
+@app.post("/atualizar_perfil")
+def atualizar_perfil(body: AtualizarPerfilBody):
+    """
+    Atualiza nome e email do utilizador.
+    """
+    if not body.nome.strip():
+        return {"erro": "O nome não pode estar vazio"}
+    if not body.email.strip():
+        return {"erro": "O email não pode estar vazio"}
+ 
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+ 
+        # Verificar se o email já está a ser usado por outro utilizador
+        cursor.execute(
+            "SELECT id_utilizador FROM utilizadores WHERE email = %s AND id_utilizador != %s",
+            (body.email.strip(), body.id_utilizador)
+        )
+        if cursor.fetchone():
+            cursor.close()
+            db.close()
+            return {"erro": "Este email já está a ser usado por outra conta"}
+ 
+        cursor.execute(
+            "UPDATE utilizadores SET nome = %s, email = %s WHERE id_utilizador = %s",
+            (body.nome.strip(), body.email.strip(), body.id_utilizador)
+        )
+        db.commit()
+ 
+        cursor.execute(
+            "SELECT id_utilizador, nome, email FROM utilizadores WHERE id_utilizador = %s",
+            (body.id_utilizador,)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        db.close()
+ 
+        return {
+            "status": "ok",
+            "id": user["id_utilizador"],
+            "nome": user["nome"],
+            "email": user["email"],
+        }
+ 
+    except Exception as e:
+        print(f"Erro atualizar_perfil: {e}")
+        return {"erro": "Erro no servidor"}
+
+# ── Schema para eliminar conta ────────────────────────────────────────────────
+class EliminarContaBody(BaseModel):
+    id_utilizador: int
+    password: str
+
+
+# ── POST /eliminar_conta ──────────────────────────────────────────────────────
+@app.post("/eliminar_conta")
+def eliminar_conta(body: EliminarContaBody):
+    """
+    Elimina permanentemente a conta de um utilizador.
+    Exige confirmação com a password atual antes de apagar.
+    """
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+        # Verificar se o utilizador existe
+        cursor.execute(
+            "SELECT * FROM utilizadores WHERE id_utilizador = %s",
+            (body.id_utilizador,)
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            cursor.close()
+            db.close()
+            return {"erro": "Utilizador não encontrado"}
+
+        # Confirmar a password antes de apagar
+        if not pwd_context.verify(body.password[:72], user["password"]):
+            cursor.close()
+            db.close()
+            return {"erro": "Palavra-passe incorreta"}
+
+        # Apagar o utilizador
+        cursor.execute(
+            "DELETE FROM utilizadores WHERE id_utilizador = %s",
+            (body.id_utilizador,)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"Erro eliminar_conta: {e}")
+        return {"erro": "Erro no servidor"}
+
+# ── Schema para alterar password ─────────────────────────────────────────────
+class AlterarPasswordBody(BaseModel):
+    id_utilizador: int
+    password_atual: str
+    nova_password: str
+ 
+# ── POST /alterar_password ────────────────────────────────────────────────────
+@app.post("/alterar_password")
+def alterar_password(body: AlterarPasswordBody):
+    """
+    Altera a password de um utilizador autenticado.
+    Verifica a password atual antes de atualizar.
+    """
+    if len(body.nova_password) < 6:
+        return {"erro": "A nova palavra-passe deve ter pelo menos 6 caracteres"}
+ 
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+ 
+        # Buscar o utilizador pelo id
+        cursor.execute(
+            "SELECT * FROM utilizadores WHERE id_utilizador = %s",
+            (body.id_utilizador,)
+        )
+        user = cursor.fetchone()
+ 
+        if not user:
+            cursor.close()
+            db.close()
+            return {"erro": "Utilizador não encontrado"}
+ 
+        # Verificar a password atual
+        if not pwd_context.verify(body.password_atual[:72], user["password"]):
+            cursor.close()
+            db.close()
+            return {"erro": "A palavra-passe atual está incorreta"}
+ 
+        # Atualizar com a nova password (hashed)
+        hashed = pwd_context.hash(body.nova_password[:72])
+        cursor.execute(
+            "UPDATE utilizadores SET password = %s WHERE id_utilizador = %s",
+            (hashed, body.id_utilizador)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+ 
+        return {"status": "ok"}
+ 
+    except Exception as e:
+        print(f"Erro alterar_password: {e}")
+        return {"erro": "Erro no servidor"}
+
 # ── Schema do body do login ───────────────────────────────────────────────────
 class LoginBody(BaseModel):
     email: str
     password: str
 
-# ── Endpoint POST /login ──────────────────────────────────────────────────────
+# ── Endpoint POST /login (substitui o existente) ─────────────────────────────
 @app.post("/login")
 def login(body: LoginBody):
     try:
@@ -338,6 +235,7 @@ def login(body: LoginBody):
             "id": user["id_utilizador"],
             "nome": user["nome"],
             "email": user["email"],
+            "foto": user.get("foto"),   # pode ser None se ainda não tiver foto
         }
 
     except Exception as e:

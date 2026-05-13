@@ -4,6 +4,7 @@ import AddPessoa from "../components/AddPessoa";
 import Desaparecidas from "../components/Desaparecidas";
 import Encontradas from "../components/Encontradas";
 import VideoCapture from "../components/VideoCapture";
+import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
 
 const Dashboard = () => {
@@ -123,6 +124,9 @@ const Dashboard = () => {
           )}
           {panel === "receiver" && (
             <Receiver />
+          )}
+          {panel === "settings" && (
+            <UserSettings />
           )}
         </main>
       </div>

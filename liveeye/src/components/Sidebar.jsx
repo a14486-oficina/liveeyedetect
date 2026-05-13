@@ -1,9 +1,11 @@
+import UserMenu from "./UserMenu";
+
 const NAV = [
   { id: "add",      label: "Adicionar",    icon: "＋" },
   { id: "missing",  label: "Desaparecidas", icon: "◎" },
   { id: "found",    label: "Encontradas",  icon: "✓" },
   { id: "camera",   label: "Emissor",       icon: "⬤" },
-  { id: "receiver", label: "Recetor",     icon: "▶" },
+  { id: "receiver", label: "Recetor",       icon: "▶" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {
@@ -74,8 +76,16 @@ const Sidebar = ({ active, onNavigate, counts }) => {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div style={{ padding: "16px 22px", borderTop: "1px solid var(--border)" }}>
+      {/* Footer com perfil */}
+      <div style={{
+        padding: "12px 16px",
+        borderTop: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "10px",
+      }}>
+        <UserMenu onNavigate={onNavigate} />
         <span style={{
           fontSize: "10px", color: "var(--text-muted)",
           fontFamily: "var(--font-mono)", letterSpacing: "0.06em",

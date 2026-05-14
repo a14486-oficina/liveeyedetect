@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 
 const API = "http://10.170.130.134:8000";
 
-/* ── Estilos partilhados ─────────────────────────────────────────────────── */
 const s = {
   label: {
     fontSize: "11px", fontWeight: 500, color: "var(--text-muted)",
@@ -13,13 +12,13 @@ const s = {
   input: {
     width: "100%", background: "var(--bg-surface)", border: "1px solid var(--border)",
     borderRadius: "7px", color: "var(--text-primary)", fontFamily: "var(--font-sans)",
-    fontSize: "13px", padding: "10px 13px", outline: "none", boxSizing: "border-box",
+    fontSize: "16px", padding: "10px 13px", outline: "none", boxSizing: "border-box",
     transition: "border-color 0.15s",
   },
   group: { display: "flex", flexDirection: "column", marginBottom: "14px" },
   btn: {
     width: "100%", background: "var(--accent)", border: "none", borderRadius: "7px",
-    color: "#fff", padding: "11px", fontSize: "13px", fontWeight: 500,
+    color: "#fff", padding: "12px", fontSize: "14px", fontWeight: 500,
     fontFamily: "var(--font-sans)", cursor: "pointer", transition: "all 0.15s",
     letterSpacing: "0.01em",
   },
@@ -27,7 +26,7 @@ const s = {
   btnOutline: {
     width: "100%", background: "none",
     border: "1px solid var(--border)", borderRadius: "7px",
-    color: "var(--text-secondary)", padding: "10px", fontSize: "13px",
+    color: "var(--text-secondary)", padding: "11px", fontSize: "14px",
     fontFamily: "var(--font-sans)", cursor: "pointer", transition: "all 0.15s",
     marginTop: "8px",
   },
@@ -54,7 +53,6 @@ const inputFocus = (e) => (e.target.style.borderColor = "var(--accent)");
 const inputBlur  = (e) => (e.target.style.borderColor = "var(--border)");
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/* ── Logo reutilizável ───────────────────────────────────────────────────── */
 const Logo = () => (
   <div style={{ position: "relative", display: "inline-block", marginBottom: "16px" }}>
     <div style={{
@@ -69,7 +67,6 @@ const Logo = () => (
   </div>
 );
 
-/* ── Painel de Login ─────────────────────────────────────────────────────── */
 const PainelLogin = ({ onRegister, onRecover }) => {
   const navigate = useNavigate();
   const [form, setForm]         = useState({ email: "", pass: "" });
@@ -99,7 +96,8 @@ const PainelLogin = ({ onRegister, onRecover }) => {
 
   return (
     <>
-      <div style={{ textAlign: "center", marginBottom: "28px" }}> <Logo />
+      <div style={{ textAlign: "center", marginBottom: "24px" }}>
+        <Logo />
         <h1 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>
           Bem-vindo ao LiveEye
         </h1>
@@ -143,7 +141,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
       </button>
       <button onClick={onRegister} style={s.btnOutline}>Criar conta</button>
 
-      <div style={{ marginTop: "22px", paddingTop: "18px", borderTop: "1px solid var(--border)", textAlign: "center" }}>
+      <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--border)", textAlign: "center" }}>
         <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
           Acesso apenas para operadores autorizados
         </span>
@@ -152,7 +150,6 @@ const PainelLogin = ({ onRegister, onRecover }) => {
   );
 };
 
-/* ── Painel de Criar Conta ───────────────────────────────────────────────── */
 const PainelRegisto = ({ onBack }) => {
   const navigate = useNavigate();
   const [form, setForm]         = useState({ nome: "", email: "", pass: "", pass2: "" });
@@ -171,64 +168,44 @@ const PainelRegisto = ({ onBack }) => {
       { setError("A palavra-passe deve ter pelo menos 6 caracteres."); return; }
     if (form.pass !== form.pass2)
       { setError("As palavras-passe não coincidem."); return; }
-
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/registar?nome=${encodeURIComponent(form.nome.trim())}`, {
+      const res = await fetch(`${API}/registar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim().toLowerCase(), password: form.pass }),
+        body: JSON.stringify({ nome: form.nome.trim(), email: form.email.trim().toLowerCase(), password: form.pass }),
       });
       const data = await res.json();
       if (!res.ok || data.erro) { setError(data.erro || "Erro ao criar conta."); return; }
-
-      // Login automático após registo
-      const resLogin = await fetch(`${API}/login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim().toLowerCase(), password: form.pass }),
-      });
-      const dataLogin = await resLogin.json();
-      if (dataLogin.id) {
-        sessionStorage.setItem("liveeye_user", JSON.stringify({ id: dataLogin.id, nome: dataLogin.nome, email: dataLogin.email }));
-        navigate("/dashboard");
-      } else { onBack(); }
-    } catch {
-      setError("Não foi possível ligar ao servidor.");
-    } finally { setLoading(false); }
+      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email }));
+      navigate("/dashboard");
+    } catch { setError("Não foi possível ligar ao servidor."); }
+    finally { setLoading(false); }
   };
 
   return (
     <>
-      <div style={{ textAlign: "center", marginBottom: "24px" }}> <Logo />
+      <div style={{ textAlign: "center", marginBottom: "24px" }}>
+        <Logo />
         <h1 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>Criar conta</h1>
         <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", margin: 0 }}>
           Preenche os dados para te registares
         </p>
       </div>
 
-      <div style={s.group}>
-        <label style={s.label}>Nome</label>
-        <input style={s.input} type="text" value={form.nome} onChange={set("nome")}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          onFocus={inputFocus} onBlur={inputBlur} placeholder="ex: Maria Silva" autoFocus />
-      </div>
-      <div style={s.group}>
-        <label style={s.label}>Email</label>
-        <input style={s.input} type="email" value={form.email} onChange={set("email")}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          onFocus={inputFocus} onBlur={inputBlur} placeholder="ex: maria@liveeye.pt" />
-      </div>
-      <div style={s.group}>
-        <label style={s.label}>Palavra-passe</label>
-        <input style={s.input} type={showPass ? "text" : "password"} value={form.pass} onChange={set("pass")}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          onFocus={inputFocus} onBlur={inputBlur} placeholder="mín. 6 caracteres" autoComplete="new-password" />
-      </div>
-      <div style={s.group}>
-        <label style={s.label}>Confirmar palavra-passe</label>
-        <input style={s.input} type={showPass ? "text" : "password"} value={form.pass2} onChange={set("pass2")}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          onFocus={inputFocus} onBlur={inputBlur} placeholder="repete a palavra-passe" autoComplete="new-password" />
-      </div>
+      {[
+        { label: "Nome completo", key: "nome", type: "text",     ph: "ex: João Silva",           auto: "name" },
+        { label: "Email",         key: "email", type: "email",   ph: "ex: joao@liveeye.pt",       auto: "email" },
+        { label: "Palavra-passe", key: "pass",  type: showPass ? "text" : "password", ph: "mín. 6 caracteres", auto: "new-password" },
+        { label: "Confirmar",     key: "pass2", type: showPass ? "text" : "password", ph: "repete a palavra-passe", auto: "new-password" },
+      ].map(({ label, key, type, ph, auto }) => (
+        <div key={key} style={s.group}>
+          <label style={s.label}>{label}</label>
+          <input style={s.input} type={type} value={form[key]} onChange={set(key)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            onFocus={inputFocus} onBlur={inputBlur}
+            placeholder={ph} autoComplete={auto} />
+        </div>
+      ))}
 
       <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginBottom: "14px" }}>
         <input type="checkbox" checked={showPass} onChange={(e) => setShowPass(e.target.checked)} />
@@ -248,68 +225,65 @@ const PainelRegisto = ({ onBack }) => {
   );
 };
 
-/* ── Painel de Recuperação ───────────────────────────────────────────────── */
 const PainelRecuperacao = ({ onBack }) => {
-  const [step, setStep]           = useState("email"); // "email" | "codigo" | "nova"
-  const [email, setEmail]         = useState("");
-  const [codigo, setCodigo]       = useState("");
-  const [novaPass, setNovaPass]   = useState("");
+  const [step, setStep] = useState("email");
+  const [email, setEmail] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [novaPass, setNovaPass] = useState("");
   const [novaPass2, setNovaPass2] = useState("");
-  const [error, setError]         = useState("");
-  const [success, setSuccess]     = useState("");
-  const [loading, setLoading]     = useState(false);
-  const [showPass, setShowPass]   = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const pedirCodigo = async () => {
     setError(""); setSuccess("");
-    if (!email.trim()) { setError("Introduz o teu email."); return; }
-    if (!emailRegex.test(email.trim())) { setError("Email inválido."); return; }
+    if (!email.trim() || !emailRegex.test(email.trim())) { setError("Introduz um email válido."); return; }
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/recuperar/pedir`, {
+      const res = await fetch(`${API}/recuperar_password`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json();
-      if (!res.ok || data.erro) { setError(data.erro || "Erro ao enviar email."); return; }
-      setSuccess("Código enviado! Verifica o teu email (incluindo spam).");
+      if (!res.ok || data.erro) throw new Error(data.erro || "Erro");
+      setSuccess("Código enviado para o teu email.");
       setStep("codigo");
-    } catch { setError("Não foi possível ligar ao servidor."); }
+    } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
   const verificarCodigo = async () => {
     setError(""); setSuccess("");
-    if (codigo.length !== 6) { setError("O código tem 6 dígitos."); return; }
+    if (codigo.length !== 6) { setError("O código deve ter 6 dígitos."); return; }
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/recuperar/verificar`, {
+      const res = await fetch(`${API}/verificar_codigo`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), codigo }),
       });
       const data = await res.json();
-      if (!res.ok || data.erro) { setError(data.erro || "Código inválido ou expirado."); return; }
-      setSuccess("Código correto! Define a tua nova palavra-passe.");
+      if (!res.ok || data.erro) throw new Error(data.erro || "Código inválido");
       setStep("nova");
-    } catch { setError("Não foi possível ligar ao servidor."); }
+    } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
   const definirNova = async () => {
     setError(""); setSuccess("");
-    if (novaPass.length < 6) { setError("Mínimo 6 caracteres."); return; }
+    if (novaPass.length < 6) { setError("A palavra-passe deve ter pelo menos 6 caracteres."); return; }
     if (novaPass !== novaPass2) { setError("As palavras-passe não coincidem."); return; }
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/recuperar/redefinir`, {
+      const res = await fetch(`${API}/definir_nova_password`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), codigo, nova_password: novaPass }),
       });
       const data = await res.json();
-      if (!res.ok || data.erro) { setError(data.erro || "Erro ao redefinir."); return; }
-      setSuccess("Palavra-passe alterada! Podes fazer login.");
-      setTimeout(onBack, 2000);
-    } catch { setError("Não foi possível ligar ao servidor."); }
+      if (!res.ok || data.erro) throw new Error(data.erro || "Erro");
+      setSuccess("Palavra-passe alterada! Redirecionar...");
+      setTimeout(onBack, 1800);
+    } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
@@ -322,7 +296,8 @@ const PainelRecuperacao = ({ onBack }) => {
 
   return (
     <>
-      <div style={{ textAlign: "center", marginBottom: "20px" }}> <Logo />
+      <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <Logo />
         <h1 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>
           {titles[step][0]}
         </h1>
@@ -331,7 +306,6 @@ const PainelRecuperacao = ({ onBack }) => {
         </p>
       </div>
 
-      {/* Barra de progresso */}
       <div style={{ display: "flex", gap: "6px", marginBottom: "20px" }}>
         {steps.map((st, i) => (
           <div key={st} style={{
@@ -417,10 +391,8 @@ const PainelRecuperacao = ({ onBack }) => {
   );
 };
 
-/* ── Componente principal ────────────────────────────────────────────────── */
 const Login = () => {
-  const [painel, setPainel] = useState("login"); // "login" | "registo" | "recuperacao"
-
+  const [painel, setPainel] = useState("login");
   const subtitles = { login: "/ Acesso", registo: "/ Registo", recuperacao: "/ Recuperação" };
 
   return (
@@ -437,12 +409,26 @@ const Login = () => {
         .login-card { animation: fade-up 0.3s ease; }
         .login-btn:hover:not(:disabled) { filter: brightness(1.08); }
         .login-btn:active:not(:disabled) { transform: scale(0.98); }
+
+        /* Mobile login tweaks */
+        @media (max-width: 480px) {
+          .login-card {
+            border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+            padding: 28px 20px !important;
+          }
+          .login-main {
+            padding: 0 !important;
+            align-items: flex-start !important;
+          }
+        }
       `}</style>
 
       <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
 
         <header style={{
-          display: "flex", alignItems: "center", padding: "16px 28px",
+          display: "flex", alignItems: "center", padding: "14px 20px",
           background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -457,11 +443,11 @@ const Login = () => {
           </div>
         </header>
 
-        <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px" }}>
+        <main className="login-main" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div key={painel} className="login-card" style={{
             width: "100%", maxWidth: "390px",
             background: "var(--bg-surface)", border: "1px solid var(--border)",
-            borderRadius: "14px", padding: "36px 32px", boxShadow: "var(--shadow-md)",
+            borderRadius: "14px", padding: "32px 28px", boxShadow: "var(--shadow-md)",
           }}>
             {painel === "login"       && <PainelLogin       onRegister={() => setPainel("registo")} onRecover={() => setPainel("recuperacao")} />}
             {painel === "registo"     && <PainelRegisto      onBack={() => setPainel("login")} />}
@@ -470,7 +456,7 @@ const Login = () => {
         </main>
 
         <footer style={{
-          padding: "14px 28px", borderTop: "1px solid var(--border)",
+          padding: "12px 20px", borderTop: "1px solid var(--border)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>v1.0.0</span>

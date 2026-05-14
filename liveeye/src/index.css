@@ -85,9 +85,18 @@ html.dark {
   color-scheme: dark;
 }
 
+html.dark .mobile-nav {
+  background: rgba(20, 20, 18, 0.97) !important;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
-body { margin: 0; background: var(--bg); }
+body {
+  margin: 0;
+  background: var(--bg);
+  /* Prevent overscroll bounce on iOS */
+  overscroll-behavior: none;
+}
 
 #root {
   width: 100%;
@@ -126,3 +135,21 @@ input[type=file]::file-selector-button {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+/* ── Mobile global fixes ── */
+@media (max-width: 768px) {
+  /* Better tap targets */
+  button, a, select {
+    touch-action: manipulation;
+  }
+
+  /* Prevent zoom on input focus on iOS */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Ensure modals don't overflow on small screens */
+  .modal-overlay {
+    padding: 16px;
+  }
+}

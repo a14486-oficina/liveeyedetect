@@ -88,47 +88,11 @@ const VideoCapture = () => {
         .vc-video-box { aspect-ratio: 9/16; max-width: 480px; width: 100%; }
         .vc-cards    { grid-template-columns: 1fr 1fr; max-width: 480px; width: 100%; }
         @media (max-width: 480px) {
-          .vc-header { padding: 12px 16px !important; }
-          .vc-main   { padding: 16px !important; }
+          .vc-main { padding: 16px !important; }
         }
       `}</style>
 
-      <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
-
-        {/* Header */}
-        <header className="vc-header" style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 28px",
-          background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{
-              width: "26px", height: "26px", borderRadius: "6px",
-              background: "var(--accent)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", color: "#fff",
-            }}>◎</div>
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)" }}>
-              LiveEye{" "}
-              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>/ Câmara</span>
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ position: "relative", width: "8px", height: "8px" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotColor }} />
-              {connected && (
-                <div style={{
-                  position: "absolute", inset: 0, borderRadius: "50%",
-                  background: dotColor, animation: "pulse-ring 1.5s ease-out infinite",
-                }} />
-              )}
-            </div>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
-              {status}
-            </span>
-          </div>
-        </header>
+      <div style={{ display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
 
         {/* Main */}
         <main className="vc-main" style={{

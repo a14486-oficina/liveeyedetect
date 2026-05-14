@@ -23,7 +23,6 @@ const Dashboard = () => {
     setSidebarOpen(false);
   };
 
-  // Receiver e Camera ocupam o ecrã completo (sem padding do dashboard)
   const isFullscreen = panel === "receiver" || panel === "camera";
 
   return (
@@ -37,13 +36,15 @@ const Dashboard = () => {
         .dash-main { margin-left: 220px; }
         .dash-main.padded { padding: 48px 52px; }
         .dash-mobile-spacer { display: none; }
+        .dash-mobile-nav { display: none; }
 
         @media (max-width: 768px) {
           .dash-sidebar { display: none; }
           .dash-mobile-header { display: flex; }
-          .dash-main { margin-left: 0 !important; }
-          .dash-main.padded { padding: 20px 18px !important; }
-          .dash-mobile-spacer { display: block; height: 60px; }
+          .dash-main { margin-left: 0 !important; margin-bottom: 64px; }
+          .dash-main.padded { padding: 16px 14px !important; }
+          .dash-mobile-spacer { display: block; height: 56px; }
+          .dash-mobile-nav { display: flex; }
         }
 
         .drawer {
@@ -56,6 +57,35 @@ const Dashboard = () => {
           position: fixed; inset: 0; background: rgba(26,25,22,0.25);
           z-index: 200; backdrop-filter: blur(2px);
         }
+
+        /* Mobile bottom nav */
+        .mobile-nav {
+          position: fixed; bottom: 0; left: 0; right: 0; z-index: 150;
+          background: rgba(247,246,243,0.97);
+          backdrop-filter: blur(14px);
+          border-top: 1px solid var(--border);
+          padding: 6px 4px env(safe-area-inset-bottom, 0px);
+          justify-content: space-around; align-items: center;
+          gap: 2px;
+        }
+        html.dark .mobile-nav {
+          background: rgba(20,20,18,0.97);
+        }
+        .mobile-nav-btn {
+          display: flex; flex-direction: column; align-items: center; gap: 3px;
+          flex: 1; padding: 6px 4px; border: none; background: transparent;
+          cursor: pointer; border-radius: 10px; transition: background 0.12s;
+          min-width: 0;
+        }
+        .mobile-nav-btn.active { background: var(--accent-light); }
+        .mobile-nav-icon { font-size: 17px; line-height: 1; }
+        .mobile-nav-label {
+          font-size: 9px; font-family: var(--font-mono);
+          color: var(--text-muted); text-transform: uppercase;
+          letter-spacing: 0.05em; white-space: nowrap;
+        }
+        .mobile-nav-btn.active .mobile-nav-label { color: var(--accent); }
+        .mobile-nav-btn.active .mobile-nav-icon { filter: none; }
       `}</style>
 
       <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
@@ -69,26 +99,28 @@ const Dashboard = () => {
         <header className="dash-mobile-header" style={{
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           alignItems: "center", justifyContent: "space-between",
-          padding: "14px 18px",
-          background: "rgba(247,246,243,0.95)", backdropFilter: "blur(12px)",
+          padding: "12px 16px",
+          background: "rgba(247,246,243,0.97)", backdropFilter: "blur(12px)",
           borderBottom: "1px solid var(--border)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{
-              width: "26px", height: "26px", borderRadius: "6px",
+              width: "24px", height: "24px", borderRadius: "6px",
               background: "var(--accent)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px",
               color: "#fff",
             }}>◎</div>
             <span style={{ fontFamily: "var(--font-sans)", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
               LiveEye
             </span>
           </div>
-          <button onClick={() => setSidebarOpen(true)} style={{
-            background: "var(--bg-raised)", border: "1px solid var(--border)",
-            borderRadius: "7px", color: "var(--text-secondary)", padding: "7px 13px",
-            cursor: "pointer", fontSize: "16px", lineHeight: 1,
-          }}>☰</button>
+          {/* Show settings button on mobile header */}
+          <button onClick={() => handleNavigate("settings")} style={{
+            background: panel === "settings" ? "var(--accent-light)" : "var(--bg-raised)",
+            border: "1px solid var(--border)",
+            borderRadius: "7px", color: panel === "settings" ? "var(--accent)" : "var(--text-secondary)",
+            padding: "7px 12px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
+          }}>⚙</button>
         </header>
 
         {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
@@ -104,9 +136,7 @@ const Dashboard = () => {
         >
           <div className="dash-mobile-spacer" />
 
-          {panel === "add" && (
-            <AddPessoa onSuccess={handleAddSuccess} />
-          )}
+          {panel === "add" && <AddPessoa onSuccess={handleAddSuccess} />}
           {panel === "missing" && (
             <Desaparecidas
               key={refreshKey}
@@ -119,16 +149,32 @@ const Dashboard = () => {
               onCountChange={(n) => setCounts((c) => ({ ...c, found: n }))}
             />
           )}
-          {panel === "camera" && (
-            <VideoCapture />
-          )}
-          {panel === "receiver" && (
-            <Receiver />
-          )}
-          {panel === "settings" && (
-            <UserSettings />
-          )}
+          {panel === "camera" && <VideoCapture />}
+          {panel === "receiver" && <Receiver />}
+          {panel === "settings" && <UserSettings />}
         </main>
+
+        {/* Mobile bottom navigation */}
+        <nav className="dash-mobile-nav mobile-nav">
+          {[
+            { id: "add",      icon: "＋", label: "Adicionar" },
+            { id: "missing",  icon: "◎",  label: "Desapar." },
+            { id: "found",    icon: "✓",  label: "Encontr." },
+            { id: "camera",   icon: "⬤",  label: "Emissor" },
+            { id: "receiver", icon: "▶",  label: "Recetor" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              className={`mobile-nav-btn${panel === item.id ? " active" : ""}`}
+              onClick={() => handleNavigate(item.id)}
+            >
+              <span className="mobile-nav-icon" style={{
+                color: panel === item.id ? "var(--accent)" : "var(--text-muted)",
+              }}>{item.icon}</span>
+              <span className="mobile-nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
     </>
   );

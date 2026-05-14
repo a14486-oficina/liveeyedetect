@@ -15,6 +15,7 @@ const Receiver = () => {
   const [alert, setAlert] = useState(false);
   const [detections, setDetections] = useState([]);
   const [fps, setFps] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(false);
   const fpsCountRef = useRef(0);
 
   // FPS counter
@@ -124,12 +125,7 @@ const Receiver = () => {
     window.addEventListener("resize", resizeCanvas);
 
     const sendFrame = () => {
-      if (
-        video.videoWidth === 0 ||
-        wsYolo.readyState !== WebSocket.OPEN ||
-        isWaitingRef.current
-      ) return;
-
+      if (video.videoWidth === 0 || wsYolo.readyState !== WebSocket.OPEN || isWaitingRef.current) return;
       isWaitingRef.current = true;
       capture.width = video.videoWidth;
       capture.height = video.videoHeight;
@@ -172,12 +168,10 @@ const Receiver = () => {
         const h = det.h * scaleY;
         const isKnown = !!det.name;
 
-        // Box — use light-mode colors: terracotta for unknown, green for known
         ctx.strokeStyle = isKnown ? "#2d7a4f" : "#c0392b";
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
 
-        // Corner accents
         const cs = 12;
         ctx.lineWidth = 3;
         [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy], i) => {
@@ -188,7 +182,6 @@ const Receiver = () => {
           ctx.stroke();
         });
 
-        // Label
         if (det.name) {
           ctx.fillStyle = isKnown ? "rgba(45,122,79,0.9)" : "rgba(192,57,43,0.9)";
           const label = det.name;
@@ -213,11 +206,88 @@ const Receiver = () => {
     };
   }, []);
 
+  const InfoCard = ({ children, title }) => (
+    <div style={{
+      borderRadius: "10px", padding: "14px 16px",
+      background: "var(--bg-surface)", border: "1px solid var(--border)",
+      boxShadow: "var(--shadow-sm)", marginBottom: "10px",
+    }}>
+      {title && <p style={{
+        fontSize: "10px", fontWeight: 500, marginBottom: "10px",
+        letterSpacing: "0.09em", textTransform: "uppercase",
+        color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+      }}>{title}</p>}
+      {children}
+    </div>
+  );
+
+  const statsBar = (
+    <InfoCard>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ textAlign: "center" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>FPS</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Deteções</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)" }}>{detections.length}</span>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ position: "relative", width: "8px", height: "8px", margin: "0 auto 4px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--accent)" }} />
+            {connected && <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "var(--success)", animation: "pulse-ring 1.5s ease-out infinite" }} />}
+          </div>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>{connected ? "Ligado" : status}</span>
+        </div>
+      </div>
+    </InfoCard>
+  );
+
+  const detectionsList = (
+    <InfoCard title="Deteções ativas">
+      {detections.length === 0 ? (
+        <p style={{ color: "var(--text-muted)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>Nenhuma deteção</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {detections.map((det, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              borderRadius: "7px", padding: "7px 10px",
+              background: det.name ? "var(--success-light)" : "var(--accent-light)",
+              border: `1px solid ${det.name ? "var(--success-border)" : "var(--accent-border)"}`,
+            }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0, background: det.name ? "var(--success)" : "var(--accent)" }} />
+              <span style={{ fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: det.name ? "var(--success)" : "var(--accent)", fontFamily: "var(--font-mono)" }}>
+                {det.name || `Pessoa #${i + 1}`}
+              </span>
+              <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                {Math.round(det.conf * 100)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </InfoCard>
+  );
+
+  const systemInfo = (
+    <InfoCard title="Sistema">
+      {[
+        ["WebRTC",  connected ? "Ligado" : "Desligado", connected],
+        ["YOLO",    fps > 0   ? "Ativo"  : "Inativo",  fps > 0],
+        ["Alertas", alert     ? "ATIVO"  : "Normal",   alert],
+      ].map(([label, val, ok]) => (
+        <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
+          <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)", color: ok ? "var(--success)" : "var(--text-muted)" }}>{val}</span>
+        </div>
+      ))}
+    </InfoCard>
+  );
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@300;400;500&display=swap');
-
         @keyframes pulse-ring {
           0%   { transform: scale(1); opacity: 0.8; }
           100% { transform: scale(2); opacity: 0; }
@@ -230,14 +300,80 @@ const Receiver = () => {
           0%   { top: 0%; }
           100% { top: 100%; }
         }
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to   { transform: translateY(0); }
+        }
         .scan-line   { animation: scan-line 3s linear infinite; }
         .alert-flash { animation: alert-flash 0.4s ease-in-out 3; }
+
+        /* Desktop layout */
+        .receiver-layout {
+          display: flex; gap: 20px; padding: 20px; flex: 1;
+        }
+        .receiver-video-area {
+          display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 0 0 auto;
+        }
+        .receiver-video-box {
+          position: relative; border-radius: 12px; overflow: hidden;
+          background: var(--bg-raised); border: 1px solid var(--border);
+          box-shadow: var(--shadow-md); aspect-ratio: 9/16;
+          height: calc(100svh - 140px); width: auto;
+        }
+        .receiver-side-panel {
+          width: 240px; display: flex; flex-direction: column; gap: 0px; flex-shrink: 0;
+        }
+        .receiver-fab { display: none; }
+        .receiver-bottom-sheet { display: none; }
+        .receiver-mobile-stats { display: none; }
+
+        /* Mobile layout */
+        @media (max-width: 768px) {
+          .receiver-layout {
+            flex-direction: column; padding: 0; gap: 0;
+          }
+          .receiver-video-area {
+            width: 100%; flex: none; gap: 0;
+          }
+          .receiver-video-box {
+            height: calc(100svh - 130px) !important;
+            width: 100% !important; border-radius: 0;
+            aspect-ratio: unset !important;
+          }
+          .receiver-side-panel { display: none; }
+          .receiver-fab {
+            display: flex; position: fixed; bottom: 80px; right: 16px;
+            width: 52px; height: 52px; border-radius: 50%;
+            background: var(--accent); border: none;
+            box-shadow: 0 4px 16px rgba(192,57,43,0.35);
+            align-items: center; justify-content: center;
+            font-size: 18px; color: #fff; cursor: pointer; z-index: 120;
+          }
+          .receiver-fab.has-detections {
+            animation: pulse-ring 1s ease-out infinite;
+          }
+          .receiver-bottom-sheet {
+            display: block; position: fixed; bottom: 64px; left: 0; right: 0;
+            background: var(--bg-surface); border-top: 1px solid var(--border);
+            border-radius: 16px 16px 0 0; max-height: 70vh; overflow-y: auto;
+            z-index: 110; padding: 12px 16px 16px;
+            animation: slideUp 0.25s cubic-bezier(0.2,0,0.2,1);
+            box-shadow: 0 -4px 24px rgba(26,25,22,0.12);
+          }
+          .receiver-mobile-stats {
+            display: flex; position: absolute; bottom: 10px; left: 10px;
+            gap: 6px; z-index: 20;
+          }
+          .stat-pill {
+            background: rgba(247,246,243,0.9); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 99px;
+            padding: 4px 10px; font-family: var(--font-mono); font-size: 11px;
+            color: var(--text-secondary); display: flex; align-items: center; gap: 5px;
+          }
+        }
       `}</style>
 
-      <div style={{
-        display: "flex", flexDirection: "column",
-        background: "var(--bg)", fontFamily: "var(--font-sans)",
-      }}>
+      <div style={{ display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)", height: "100%" }}>
 
         {/* Alert overlay */}
         {alert && (
@@ -247,19 +383,11 @@ const Receiver = () => {
           }} />
         )}
 
-        {/* Main */}
-        <main style={{ flex: 1, display: "flex", gap: "20px", padding: "20px" }}>
+        <main className="receiver-layout">
 
           {/* Video area */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", flex: "0 0 auto" }}>
-            <div style={{
-              position: "relative", borderRadius: "12px", overflow: "hidden",
-              background: "var(--bg-raised)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-md)",
-              aspectRatio: "9/16",
-              height: "calc(100svh - 140px)",
-              width: "auto",
-            }}>
+          <div className="receiver-video-area">
+            <div className="receiver-video-box">
 
               {/* Scan line */}
               {connected && (
@@ -300,15 +428,9 @@ const Receiver = () => {
                 </div>
               )}
 
-              <video
-                ref={videoRef}
-                autoPlay playsInline muted
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }}
-              />
-              <canvas
-                ref={overlayRef}
-                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
-              />
+              <video ref={videoRef} autoPlay playsInline muted
+                style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }} />
+              <canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} />
 
               {/* Alert banner */}
               {alert && (
@@ -323,160 +445,51 @@ const Receiver = () => {
                   </span>
                 </div>
               )}
+
+              {/* Mobile stats overlay */}
+              <div className="receiver-mobile-stats">
+                <div className="stat-pill">
+                  <span>{fps} FPS</span>
+                </div>
+                <div className="stat-pill" style={{ color: detections.length > 0 ? "var(--accent)" : undefined }}>
+                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--accent)" }} />
+                  <span>{detections.length} det.</span>
+                </div>
+              </div>
             </div>
 
             <canvas ref={captureRef} style={{ display: "none" }} />
           </div>
 
-          {/* Side panel */}
-          <div style={{ width: "240px", display: "flex", flexDirection: "column", gap: "12px", flexShrink: 0 }}>
-
-            {/* Status bar (previously in header) */}
-            <div style={{
-              borderRadius: "10px", padding: "12px 16px",
-              background: "var(--bg-surface)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-sm)",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              {/* FPS */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>FPS</span>
-                <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
-              </div>
-              {/* Detections */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Deteções</span>
-                <span style={{
-                  fontSize: "13px", fontWeight: 500, fontFamily: "var(--font-mono)",
-                  color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)",
-                }}>{detections.length}</span>
-              </div>
-              {/* Status dot */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                <div style={{ position: "relative", width: "8px", height: "8px" }}>
-                  <div style={{
-                    width: "8px", height: "8px", borderRadius: "50%",
-                    background: connected ? "var(--success)" : "var(--accent)",
-                  }} />
-                  {connected && (
-                    <div style={{
-                      position: "absolute", inset: 0, borderRadius: "50%",
-                      background: "var(--success)",
-                      animation: "pulse-ring 1.5s ease-out infinite",
-                    }} />
-                  )}
-                </div>
-                <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
-                  {status}
-                </span>
-              </div>
-            </div>
-
-            {/* Live detections */}
-            <div style={{
-              borderRadius: "10px", padding: "16px",
-              background: "var(--bg-surface)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-sm)",
-            }}>
-              <p style={{
-                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
-                letterSpacing: "0.09em", textTransform: "uppercase",
-                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
-              }}>Deteções ativas</p>
-
-              {detections.length === 0 ? (
-                <p style={{ color: "var(--text-muted)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>
-                  Nenhuma deteção
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {detections.map((det, i) => (
-                    <div key={i} style={{
-                      display: "flex", alignItems: "center", gap: "8px",
-                      borderRadius: "7px", padding: "7px 10px",
-                      background: det.name ? "var(--success-light)" : "var(--accent-light)",
-                      border: `1px solid ${det.name ? "var(--success-border)" : "var(--accent-border)"}`,
-                    }}>
-                      <div style={{
-                        width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
-                        background: det.name ? "var(--success)" : "var(--accent)",
-                      }} />
-                      <span style={{
-                        fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        color: det.name ? "var(--success)" : "var(--accent)",
-                        fontFamily: "var(--font-mono)",
-                      }}>
-                        {det.name || `Pessoa #${i + 1}`}
-                      </span>
-                      <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                        {Math.round(det.conf * 100)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* System info */}
-            <div style={{
-              borderRadius: "10px", padding: "16px",
-              background: "var(--bg-surface)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-sm)",
-            }}>
-              <p style={{
-                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
-                letterSpacing: "0.09em", textTransform: "uppercase",
-                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
-              }}>Sistema</p>
-
-              {[
-                ["WebRTC",  connected ? "Ligado" : "Desligado", connected],
-                ["YOLO",    fps > 0   ? "Ativo"  : "Inativo",  fps > 0],
-                ["Alertas", alert     ? "ATIVO"  : "Normal",   alert],
-              ].map(([label, val, ok]) => (
-                <div key={label} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  marginBottom: "8px",
-                }}>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
-                  <span style={{
-                    fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)",
-                    color: ok ? "var(--success)" : "var(--text-muted)",
-                  }}>{val}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Legend */}
-            <div style={{
-              borderRadius: "10px", padding: "16px",
-              background: "var(--bg-surface)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-sm)",
-            }}>
-              <p style={{
-                fontSize: "10px", fontWeight: 500, marginBottom: "12px",
-                letterSpacing: "0.09em", textTransform: "uppercase",
-                color: "var(--text-muted)", fontFamily: "var(--font-mono)",
-              }}>Legenda</p>
-
-              {[
-                ["var(--accent)",  "Pessoa não identificada"],
-                ["var(--success)", "Pessoa reconhecida"],
-              ].map(([color, label]) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                  <div style={{
-                    width: "10px", height: "10px", borderRadius: "3px", flexShrink: 0,
-                    background: color,
-                  }} />
-                  <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-
+          {/* Desktop side panel */}
+          <div className="receiver-side-panel">
+            {statsBar}
+            {detectionsList}
+            {systemInfo}
           </div>
         </main>
+
+        {/* Mobile FAB to toggle bottom sheet */}
+        <button
+          className={`receiver-fab${detections.length > 0 ? " has-detections" : ""}`}
+          onClick={() => setPanelOpen((o) => !o)}
+          style={{ background: detections.length > 0 ? "var(--accent)" : "var(--bg-surface)", color: detections.length > 0 ? "#fff" : "var(--text-secondary)", border: "1px solid var(--border)" }}
+        >
+          {panelOpen ? "✕" : "≡"}
+        </button>
+
+        {/* Mobile bottom sheet */}
+        {panelOpen && (
+          <>
+            <div onClick={() => setPanelOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 109 }} />
+            <div className="receiver-bottom-sheet">
+              <div style={{ width: "36px", height: "4px", background: "var(--border-strong)", borderRadius: "99px", margin: "0 auto 14px" }} />
+              {statsBar}
+              {detectionsList}
+              {systemInfo}
+            </div>
+          </>
+        )}
       </div>
     </>
   );

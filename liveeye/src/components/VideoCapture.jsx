@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 
+import { WS_PROTO, WS_HOST } from "../api.js";
+
 const VideoCapture = () => {
   const videoRef = useRef(null);
   const [status, setStatus] = useState("A aguardar permissão da câmara...");
@@ -24,9 +26,7 @@ const VideoCapture = () => {
   };
 
   const startWebRTC = async (stream) => {
-    const wsSignal = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-signal"
-    );
+    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal");
     wsSignalRef.current = wsSignal;
 
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });

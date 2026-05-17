@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
-const API = "http://10.170.130.134:8000";
+import { API } from "../api.js";
 
 const s = {
   label: {
@@ -21,6 +21,39 @@ const s = {
     boxShadow: "var(--shadow-sm)",
   },
 };
+
+// ── Fila global em background ─────────────────────────────────────────────────
+// Vive fora do componente para persistir entre re-renders
+const queue = [];
+let isProcessing = false;
+
+async function processQueue(onSuccess) {
+  if (isProcessing || queue.length === 0) return;
+  isProcessing = true;
+
+  while (queue.length > 0) {
+    const { fd, resolve } = queue.shift();
+    try {
+      const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || json.erro) throw new Error(json.erro || "Erro ao criar");
+      resolve({ ok: true });
+      onSuccess();
+    } catch (e) {
+      resolve({ ok: false, error: e.message });
+    }
+  }
+
+  isProcessing = false;
+}
+
+function enqueue(fd, onSuccess) {
+  return new Promise((resolve) => {
+    queue.push({ fd, resolve });
+    processQueue(onSuccess);
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PhotoSlot = ({ label, file, onChange }) => {
   const inputRef = useRef(null);
@@ -78,14 +111,14 @@ const PhotoSlot = ({ label, file, onChange }) => {
   );
 };
 
-const AddPessoa = ({ onSuccess }) => {
+const AddPessoa = ({ onNavigate, onRefresh }) => {
   const [form, setForm] = useState({
     nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "",
   });
   const [fotos, setFotos] = useState([null, null, null]);
   const [locs, setLocs] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [formKey, setFormKey] = useState(0);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const setFoto = (i) => (file) => setFotos((prev) => { const next = [...prev]; next[i] = file; return next; });
@@ -107,38 +140,47 @@ const AddPessoa = ({ onSuccess }) => {
     return null;
   };
 
-  const submit = async () => {
+  const resetForm = () => {
+    setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "" });
+    setFotos([null, null, null]);
+    setLocs([]);
+    setError("");
+    setFormKey((k) => k + 1); // força remount dos PhotoSlot, limpando os inputs de ficheiro
+  };
+
+  const submit = () => {
     setError("");
     const err = validate();
     if (err) { setError(err); return; }
-    setLoading(true);
-    try {
-      const fd = new FormData();
-      const sexo = form.sexo === "Outro" ? form.sexoOutro : form.sexo;
-      fd.append("nome", form.nome.trim());
-      fd.append("idade", parseInt(form.idade));
-      fd.append("sexo", sexo);
-      fd.append("lat", parseFloat(form.lat));
-      fd.append("lon", parseFloat(form.lon));
-      fd.append("observacoes", form.obs.trim());
-      fd.append("imagem1", fotos[0]);
-      if (fotos[1]) fd.append("imagem2", fotos[1]);
-      if (fotos[2]) fd.append("imagem3", fotos[2]);
-      fd.append("historico", JSON.stringify(
-        locs.filter(l => l.lat && l.lon).map(l => ({
-          lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
-        }))
-      ));
-      const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || json.erro) throw new Error(json.erro || "Erro ao criar");
-      setForm({ nome: "", idade: "", sexo: "", sexoOutro: "", lat: "", lon: "", obs: "" });
-      setFotos([null, null, null]);
-      setLocs([]);
-      onSuccess();
-    } catch (e) {
-      setError(e.message || "Erro ao criar pessoa. Verifica o servidor.");
-    } finally { setLoading(false); }
+
+    // Constrói o FormData agora (antes de limpar o form)
+    const fd = new FormData();
+    const sexo = form.sexo === "Outro" ? form.sexoOutro : form.sexo;
+    fd.append("nome", form.nome.trim());
+    fd.append("idade", parseInt(form.idade));
+    fd.append("sexo", sexo);
+    fd.append("lat", parseFloat(form.lat));
+    fd.append("lon", parseFloat(form.lon));
+    fd.append("observacoes", form.obs.trim());
+    fd.append("imagem1", fotos[0]);
+    if (fotos[1]) fd.append("imagem2", fotos[1]);
+    if (fotos[2]) fd.append("imagem3", fotos[2]);
+    fd.append("historico", JSON.stringify(
+      locs.filter(l => l.lat && l.lon).map(l => ({
+        lat: parseFloat(l.lat), lon: parseFloat(l.lon), data: l.data, hora: l.hora,
+      }))
+    ));
+
+    // Limpa o formulário e navega imediatamente — sem esperar pelo servidor
+    resetForm();
+    onNavigate();
+
+    // Coloca na fila em background; só faz refresh da lista quando o servidor confirmar
+    enqueue(fd, onRefresh).then(({ ok, error }) => {
+      if (!ok) {
+        setError(`Erro ao criar "${fd.get("nome")}": ${error}`);
+      }
+    });
   };
 
   const inputFocus = (e) => e.target.style.borderColor = "var(--accent)";
@@ -229,7 +271,7 @@ const AddPessoa = ({ onSuccess }) => {
                 — 1 obrigatória, até 3
               </span>
             </p>
-            <div className="add-grid-3">
+            <div key={formKey} className="add-grid-3">
               <PhotoSlot label="Foto 1 (obrig.)" file={fotos[0]} onChange={setFoto(0)} />
               <PhotoSlot label="Foto 2 (opt.)"   file={fotos[1]} onChange={setFoto(1)} />
               <PhotoSlot label="Foto 3 (opt.)"   file={fotos[2]} onChange={setFoto(2)} />
@@ -275,14 +317,14 @@ const AddPessoa = ({ onSuccess }) => {
             }}>⚠ {error}</div>
           )}
 
-          <button onClick={submit} disabled={loading} style={{
-            marginTop: "20px", background: loading ? "var(--accent-mid)" : "var(--accent)",
+          <button onClick={submit} style={{
+            marginTop: "20px", background: "var(--accent)",
             border: "none", borderRadius: "7px", color: "#fff", padding: "13px 26px",
             fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-sans)",
-            cursor: loading ? "not-allowed" : "pointer", transition: "all 0.12s",
+            cursor: "pointer", transition: "all 0.12s",
             letterSpacing: "0.01em", width: "100%",
           }}>
-            {loading ? "A criar..." : "Criar registo"}
+            Criar registo
           </button>
         </div>
       </div>

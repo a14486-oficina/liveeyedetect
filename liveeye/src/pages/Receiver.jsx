@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { WS_PROTO, WS_HOST } from "../api.js";
+
 const Receiver = () => {
   const videoRef = useRef(null);
   const overlayRef = useRef(null);
@@ -42,12 +44,10 @@ const Receiver = () => {
     const ctx = canvas.getContext("2d");
     const captureCtx = capture.getContext("2d");
 
-    const wsSignal = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws-signal"
-    );
+    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal");
     wsSignalRef.current = wsSignal;
 
-    const wsYolo = new WebSocket("ws://localhost:8000/ws");
+    const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws");
     wsYoloRef.current = wsYolo;
 
     const pc = new RTCPeerConnection({
@@ -60,13 +60,24 @@ const Receiver = () => {
       dataChannelRef.current.onopen = () => console.log("Data channel aberto");
     };
 
+    // Arranca o loop de frames quando AMBOS estiverem prontos: vídeo + WS YOLO
+    let videoReady = false;
+    let yoloReady = false;
+
+    const tryStartLoop = () => {
+      if (videoReady && yoloReady) {
+        setTimeout(sendFrame, 200);
+      }
+    };
+
     pc.ontrack = (event) => {
       video.srcObject = event.streams[0];
       video.onloadedmetadata = () => {
         video.play();
         setConnected(true);
         setStatus("Vídeo recebido");
-        setTimeout(sendFrame, 1000);
+        videoReady = true;
+        tryStartLoop();
       };
     };
 
@@ -134,7 +145,11 @@ const Receiver = () => {
       wsYolo.send(dataURL);
     };
 
-    wsYolo.onopen  = () => console.log("YOLO WebSocket ligado");
+    wsYolo.onopen  = () => {
+      console.log("YOLO WebSocket ligado");
+      yoloReady = true;
+      tryStartLoop();
+    };
     wsYolo.onclose = () => console.log("YOLO WebSocket fechado");
     wsYolo.onerror = () => setStatus("Erro WebSocket YOLO");
 
@@ -196,7 +211,7 @@ const Receiver = () => {
       setTimeout(sendFrame, 50);
     };
 
-    video.addEventListener("play", () => { sendFrame(); });
+    // loop gerido por tryStartLoop() — listener "play" removido
 
     return () => {
       wsSignal.close();

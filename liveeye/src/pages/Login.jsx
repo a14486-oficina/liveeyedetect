@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = "http://10.170.130.134:8000";
+import { API } from "../api.js";
 
 const s = {
   label: {

@@ -268,11 +268,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://freya-ethylic-nicolas.ngrok-free.dev",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "http://10.170.130.134:5173",
+        "http://192.168.1.130:5173",  # frontend na rede local
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -730,6 +728,35 @@ def migrar_ids_legados():
 
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
+
+# Sala de sinalização WebRTC: guarda os dois clientes (emissor + receiver)
+# para que possam trocar offer/answer/ice candidates entre si.
+_signal_clients: list = []
+
+@app.websocket("/ws-signal")
+async def ws_signal(ws: WebSocket):
+    await ws.accept()
+    _signal_clients.append(ws)
+    print(f"[ws-signal] Cliente ligado. Total: {len(_signal_clients)}")
+    try:
+        while True:
+            data = await ws.receive_text()
+            # Reencaminha a mensagem para todos os OUTROS clientes na sala
+            for other in list(_signal_clients):
+                if other is not ws:
+                    try:
+                        await other.send_text(data)
+                    except Exception:
+                        pass
+    except WebSocketDisconnect:
+        print("[ws-signal] Cliente desligado.")
+    except Exception as e:
+        print(f"[ws-signal] Erro: {e}")
+    finally:
+        if ws in _signal_clients:
+            _signal_clients.remove(ws)
+        print(f"[ws-signal] Clientes restantes: {len(_signal_clients)}")
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):

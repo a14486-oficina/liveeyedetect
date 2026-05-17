@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 
-const API = "http://10.170.130.134:8000";
+import { API } from "../api.js";
 
-const Encontradas = ({ onCountChange }) => {
+const Encontradas = forwardRef(({ onCountChange }, ref) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,6 +16,8 @@ const Encontradas = ({ onCountChange }) => {
     } catch { /* silent */ }
     setLoading(false);
   };
+
+  useImperativeHandle(ref, () => ({ reload: carregar }));
 
   useEffect(() => { carregar(); }, []);
 
@@ -84,6 +86,6 @@ const Encontradas = ({ onCountChange }) => {
       <style>{`@keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }`}</style>
     </div>
   );
-};
+});
 
 export default Encontradas;

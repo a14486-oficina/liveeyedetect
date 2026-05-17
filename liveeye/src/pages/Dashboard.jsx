@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Sidebar from "../components/Sidebar";
 import AddPessoa from "../components/AddPessoa";
 import Desaparecidas from "../components/Desaparecidas";
@@ -10,12 +10,18 @@ import Receiver from "./Receiver";
 const Dashboard = () => {
   const [panel, setPanel] = useState("add");
   const [counts, setCounts] = useState({ missing: 0, found: 0 });
-  const [refreshKey, setRefreshKey] = useState(0);
+  const desaparecedasRef = useRef(null);
+  const encontradasRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleAddSuccess = () => {
+  const handleAddNavigate = () => {
+    // Chamado imediatamente ao submeter — apenas navega, não faz refresh
     setPanel("missing");
-    setRefreshKey((k) => k + 1);
+  };
+
+  const handleAddRefresh = () => {
+    desaparecedasRef.current?.reload();
+    encontradasRef.current?.reload();
   };
 
   const handleNavigate = (p) => {
@@ -136,16 +142,16 @@ const Dashboard = () => {
         >
           <div className="dash-mobile-spacer" />
 
-          {panel === "add" && <AddPessoa onSuccess={handleAddSuccess} />}
+          {panel === "add" && <AddPessoa onNavigate={handleAddNavigate} onRefresh={handleAddRefresh} />}
           {panel === "missing" && (
             <Desaparecidas
-              key={refreshKey}
+              ref={desaparecedasRef}
               onCountChange={(n) => setCounts((c) => ({ ...c, missing: n }))}
             />
           )}
           {panel === "found" && (
             <Encontradas
-              key={refreshKey}
+              ref={encontradasRef}
               onCountChange={(n) => setCounts((c) => ({ ...c, found: n }))}
             />
           )}

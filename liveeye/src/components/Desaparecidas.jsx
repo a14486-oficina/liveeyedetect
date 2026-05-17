@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 
-const API = "http://10.170.130.134:8000";
+import { API } from "../api.js";
 
 const s = {
   label: {
@@ -640,7 +640,7 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
 };
 
 // ─── Ecrã principal ───────────────────────────────────────────────────────────
-const Desaparecidas = ({ onCountChange }) => {
+const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -654,6 +654,8 @@ const Desaparecidas = ({ onCountChange }) => {
     } catch { /* silent */ }
     setLoading(false);
   };
+
+  useImperativeHandle(ref, () => ({ reload: carregar }));
 
   useEffect(() => { carregar(); }, []);
 
@@ -707,6 +709,6 @@ const Desaparecidas = ({ onCountChange }) => {
       `}</style>
     </div>
   );
-};
+});
 
 export default Desaparecidas;

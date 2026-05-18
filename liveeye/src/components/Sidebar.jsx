@@ -1,14 +1,36 @@
+import { useState, useEffect } from "react";
 import UserMenu from "./UserMenu";
 
-const NAV = [
+const ADMIN_EMAIL = "a14486@oficina.pt";
+
+const NAV_GESTAO = [
   { id: "add",      label: "Adicionar",    icon: "＋" },
   { id: "missing",  label: "Desaparecidas", icon: "◎" },
   { id: "found",    label: "Encontradas",  icon: "✓" },
-  { id: "camera",   label: "Emissor",       icon: "⬤" },
-  { id: "receiver", label: "Recetor",       icon: "▶" },
+];
+
+const NAV_SISTEMA = [
+  { id: "camera",   label: "Emissor",  icon: "⬤" },
+  { id: "receiver", label: "Recetor",  icon: "▶" },
+];
+
+const NAV_ADMIN = [
+  { id: "admin", label: "Convites", icon: "⚑" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("liveeye_user");
+      if (raw) {
+        const user = JSON.parse(raw);
+        if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+      }
+    } catch { /* silent */ }
+  }, []);
+
   return (
     <aside style={{
       width: "220px",
@@ -57,7 +79,7 @@ const Sidebar = ({ active, onNavigate, counts }) => {
           padding: "0 10px", marginBottom: "6px", marginTop: "4px",
         }}>Gestão</p>
 
-        {NAV.slice(0, 3).map((item) => (
+        {NAV_GESTAO.map((item) => (
           <NavBtn key={item.id} item={item} active={active} onNavigate={onNavigate} counts={counts} />
         ))}
 
@@ -71,9 +93,24 @@ const Sidebar = ({ active, onNavigate, counts }) => {
           padding: "0 10px", marginBottom: "6px",
         }}>Sistema</p>
 
-        {NAV.slice(3).map((item) => (
+        {NAV_SISTEMA.map((item) => (
           <NavBtn key={item.id} item={item} active={active} onNavigate={onNavigate} counts={counts} />
         ))}
+
+        {/* Admin — só visível para o admin */}
+        {isAdmin && (
+          <>
+            <div style={{ height: "1px", background: "var(--border)", margin: "12px 4px" }} />
+            <p style={{
+              fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--text-muted)",
+              textTransform: "uppercase", letterSpacing: "0.12em",
+              padding: "0 10px", marginBottom: "6px",
+            }}>Admin</p>
+            {NAV_ADMIN.map((item) => (
+              <NavBtn key={item.id} item={item} active={active} onNavigate={onNavigate} counts={counts} />
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Footer com perfil */}

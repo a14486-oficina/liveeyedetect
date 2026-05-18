@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import AddPessoa from "../components/AddPessoa";
 import Desaparecidas from "../components/Desaparecidas";
@@ -6,6 +6,9 @@ import Encontradas from "../components/Encontradas";
 import VideoCapture from "../components/VideoCapture";
 import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
+import AdminConvites from "../components/Adminconvites.jsx";
+
+const ADMIN_EMAIL = "a14486@oficina.pt";
 
 const Dashboard = () => {
   const [panel, setPanel] = useState("add");
@@ -13,9 +16,19 @@ const Dashboard = () => {
   const desaparecedasRef = useRef(null);
   const encontradasRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("liveeye_user");
+      if (raw) {
+        const user = JSON.parse(raw);
+        if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+      }
+    } catch { /* silent */ }
+  }, []);
 
   const handleAddNavigate = () => {
-    // Chamado imediatamente ao submeter — apenas navega, não faz refresh
     setPanel("missing");
   };
 
@@ -30,6 +43,15 @@ const Dashboard = () => {
   };
 
   const isFullscreen = panel === "receiver" || panel === "camera";
+
+  const MOBILE_NAV = [
+    { id: "add",      icon: "＋", label: "Adicionar" },
+    { id: "missing",  icon: "◎",  label: "Desapar." },
+    { id: "found",    icon: "✓",  label: "Encontr." },
+    { id: "camera",   icon: "⬤",  label: "Emissor" },
+    { id: "receiver", icon: "▶",  label: "Recetor" },
+    ...(isAdmin ? [{ id: "admin", icon: "⚑", label: "Admin" }] : []),
+  ];
 
   return (
     <>
@@ -120,7 +142,6 @@ const Dashboard = () => {
               LiveEye
             </span>
           </div>
-          {/* Show settings button on mobile header */}
           <button onClick={() => handleNavigate("settings")} style={{
             background: panel === "settings" ? "var(--accent-light)" : "var(--bg-raised)",
             border: "1px solid var(--border)",
@@ -158,17 +179,12 @@ const Dashboard = () => {
           {panel === "camera" && <VideoCapture />}
           {panel === "receiver" && <Receiver />}
           {panel === "settings" && <UserSettings />}
+          {panel === "admin" && <AdminConvites />}
         </main>
 
         {/* Mobile bottom navigation */}
         <nav className="dash-mobile-nav mobile-nav">
-          {[
-            { id: "add",      icon: "＋", label: "Adicionar" },
-            { id: "missing",  icon: "◎",  label: "Desapar." },
-            { id: "found",    icon: "✓",  label: "Encontr." },
-            { id: "camera",   icon: "⬤",  label: "Emissor" },
-            { id: "receiver", icon: "▶",  label: "Recetor" },
-          ].map((item) => (
+          {MOBILE_NAV.map((item) => (
             <button
               key={item.id}
               className={`mobile-nav-btn${panel === item.id ? " active" : ""}`}

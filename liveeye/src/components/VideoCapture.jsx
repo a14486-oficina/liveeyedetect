@@ -70,12 +70,94 @@ const VideoCapture = () => {
     return () => { wsSignalRef.current?.close(); pcRef.current?.close(); };
   }, []);
 
-  const dotColor = connected ? "var(--success)" : active ? "var(--warning)" : "var(--accent)";
+  const InfoCard = ({ children, title }) => (
+    <div style={{
+      borderRadius: "10px", padding: "14px 16px",
+      background: "var(--bg-surface)", border: "1px solid var(--border)",
+      boxShadow: "var(--shadow-sm)", marginBottom: "10px",
+    }}>
+      {title && (
+        <p style={{
+          fontSize: "10px", fontWeight: 500, marginBottom: "10px",
+          letterSpacing: "0.09em", textTransform: "uppercase",
+          color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+        }}>{title}</p>
+      )}
+      {children}
+    </div>
+  );
+
+  const statusCard = (
+    <InfoCard>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ textAlign: "center" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>WebRTC</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: connected ? "var(--success)" : "var(--text-muted)" }}>
+            {connected ? "Ligado" : "—"}
+          </span>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Câmara</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: active ? "var(--success)" : "var(--text-muted)" }}>
+            {active ? "Ativa" : "—"}
+          </span>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ position: "relative", width: "8px", height: "8px", margin: "0 auto 4px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: connected ? "var(--success)" : active ? "var(--warning)" : "var(--accent)" }} />
+            {(active || connected) && (
+              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: connected ? "var(--success)" : "var(--warning)", animation: "pulse-ring 1.5s ease-out infinite" }} />
+            )}
+          </div>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+            {connected ? "Ligado" : active ? "A ligar..." : "Inativo"}
+          </span>
+        </div>
+      </div>
+    </InfoCard>
+  );
+
+  const systemInfo = (
+    <InfoCard title="Sistema">
+      {[
+        ["WebRTC",  connected ? "Ligado"  : "Desligado", connected],
+        ["Câmara",  active    ? "Ativa"   : "Inativa",   active],
+        ["Stream",  connected ? "A enviar": "Parado",    connected],
+      ].map(([label, val, ok]) => (
+        <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
+          <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)", color: ok ? "var(--success)" : "var(--text-muted)" }}>{val}</span>
+        </div>
+      ))}
+    </InfoCard>
+  );
+
+  const actionCard = (
+    <InfoCard title="Controlo">
+      {!active ? (
+        <button onClick={startCamera} style={{
+          background: "var(--accent)", border: "none", borderRadius: "7px",
+          color: "#fff", padding: "10px 16px", fontSize: "12px",
+          fontWeight: 500, fontFamily: "var(--font-mono)",
+          cursor: "pointer", letterSpacing: "0.04em",
+          width: "100%",
+        }}>
+          Ligar Sistema
+        </button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0, background: connected ? "var(--success)" : "var(--warning)" }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-secondary)" }}>
+            {connected ? "A transmitir para o receiver" : "A estabelecer ligação..."}
+          </span>
+        </div>
+      )}
+    </InfoCard>
+  );
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@300;400;500&display=swap');
         @keyframes pulse-ring {
           0%   { transform: scale(1); opacity: 0.8; }
           100% { transform: scale(2); opacity: 0; }
@@ -85,27 +167,54 @@ const VideoCapture = () => {
           100% { top: 100%; }
         }
         .scan-line { animation: scan-line 3s linear infinite; }
-        .vc-video-box { aspect-ratio: 9/16; max-width: 480px; width: 100%; }
-        .vc-cards    { grid-template-columns: 1fr 1fr; max-width: 480px; width: 100%; }
-        @media (max-width: 480px) {
-          .vc-main { padding: 16px !important; }
+
+        /* Desktop layout — mirrors Receiver */
+        .vc-layout {
+          display: flex; gap: 20px; padding: 20px; flex: 1;
+        }
+        .vc-video-area {
+          display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 0 0 auto;
+        }
+        .vc-video-box {
+          position: relative; border-radius: 12px; overflow: hidden;
+          background: var(--bg-raised); border: 1px solid var(--border);
+          box-shadow: var(--shadow-md); aspect-ratio: 9/16;
+          height: calc(100svh - 140px); width: auto;
+        }
+        .vc-side-panel {
+          width: 240px; display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
+        }
+
+        /* Mobile layout — mirrors Receiver */
+        @media (max-width: 768px) {
+          .vc-layout {
+            flex-direction: column; padding: 0; gap: 0;
+          }
+          .vc-video-area {
+            width: 100%; flex: none; gap: 0;
+          }
+          .vc-video-box {
+            height: calc(100svh - 130px) !important;
+            width: 100% !important; border-radius: 0;
+            aspect-ratio: unset !important;
+          }
+          .vc-side-panel { display: none; }
+          .vc-mobile-action {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 120; white-space: nowrap;
+          }
         }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
+      <div style={{ display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)", height: "100%" }}>
 
-        {/* Main */}
-        <main className="vc-main" style={{
-          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px",
-        }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "18px", width: "100%", maxWidth: "480px" }}>
+        <main className="vc-layout">
 
-            {/* Video box */}
-            <div className="vc-video-box" style={{
-              position: "relative", borderRadius: "12px", overflow: "hidden",
-              background: "var(--bg-raised)", border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-md)",
-            }}>
+          {/* Video area */}
+          <div className="vc-video-area">
+            <div className="vc-video-box">
+
+              {/* Scan line */}
               {active && (
                 <div className="scan-line" style={{
                   position: "absolute", left: 0, width: "100%", height: "1px",
@@ -116,10 +225,10 @@ const VideoCapture = () => {
 
               {/* Corner decorations */}
               {[
-                { top: 0, left: 0,    borderTop: true,    borderLeft: true  },
-                { top: 0, right: 0,   borderTop: true,    borderRight: true },
-                { bottom: 0, left: 0,  borderBottom: true, borderLeft: true  },
-                { bottom: 0, right: 0, borderBottom: true, borderRight: true },
+                { top: 0,    left: 0,    borderTop: true,    borderLeft: true  },
+                { top: 0,    right: 0,   borderTop: true,    borderRight: true },
+                { bottom: 0, left: 0,    borderBottom: true, borderLeft: true  },
+                { bottom: 0, right: 0,   borderBottom: true, borderRight: true },
               ].map((pos, i) => (
                 <div key={i} style={{
                   position: "absolute", width: "18px", height: "18px", zIndex: 20, margin: "7px",
@@ -131,13 +240,14 @@ const VideoCapture = () => {
                 }} />
               ))}
 
+              {/* Waiting state */}
               {!active && (
                 <div style={{
                   position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center", gap: "8px", zIndex: 10,
+                  alignItems: "center", justifyContent: "center", gap: "10px", zIndex: 10,
                 }}>
-                  <div style={{ fontSize: "36px", color: "var(--border-strong)" }}>◎</div>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                  <div style={{ fontSize: "32px", color: "var(--border-strong)" }}>◎</div>
+                  <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
                     Câmara inativa
                   </p>
                 </div>
@@ -146,61 +256,33 @@ const VideoCapture = () => {
               <video ref={videoRef} autoPlay playsInline muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
             </div>
-
-            {/* Button / status */}
-            {!active ? (
-              <button onClick={startCamera} style={{
-                background: "var(--accent)", border: "none", borderRadius: "8px",
-                color: "#fff", padding: "13px 32px", fontSize: "14px",
-                fontWeight: 500, fontFamily: "var(--font-sans)",
-                cursor: "pointer", letterSpacing: "0.01em",
-                width: "100%", maxWidth: "300px",
-              }}>
-                Ligar Sistema de Alerta
-              </button>
-            ) : (
-              <div style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                padding: "12px 16px", borderRadius: "9px", width: "100%",
-                background: "var(--bg-surface)", border: "1px solid var(--border)",
-                boxShadow: "var(--shadow-sm)",
-              }}>
-                <div style={{
-                  width: "7px", height: "7px", borderRadius: "50%", flexShrink: 0,
-                  background: connected ? "var(--success)" : "var(--warning)",
-                }} />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-secondary)" }}>
-                  {connected ? "A transmitir para o receiver" : "A estabelecer ligação..."}
-                </span>
-              </div>
-            )}
-
-            {/* Info cards */}
-            <div className="vc-cards" style={{ display: "grid", gap: "8px" }}>
-              {[
-                ["WebRTC", connected ? "Ligado" : active ? "A ligar..." : "Inativo", connected],
-                ["Câmara", active ? "Ativa" : "Inativa", active],
-              ].map(([label, val, ok]) => (
-                <div key={label} style={{
-                  borderRadius: "8px", padding: "11px 14px",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  background: "var(--bg-surface)", border: "1px solid var(--border)",
-                  boxShadow: "var(--shadow-sm)",
-                }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
-                    {label}
-                  </span>
-                  <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: "11px", fontWeight: 500,
-                    color: ok ? "var(--success)" : "var(--text-muted)",
-                  }}>
-                    {val}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
+
+          {/* Desktop side panel */}
+          <div className="vc-side-panel">
+            {statusCard}
+            {actionCard}
+            {systemInfo}
+          </div>
+
         </main>
+
+        {/* Mobile action button */}
+        {!active && (
+          <button
+            className="vc-mobile-action"
+            onClick={startCamera}
+            style={{
+              display: "none", /* shown via media query */
+              background: "var(--accent)", border: "none", borderRadius: "99px",
+              color: "#fff", padding: "12px 28px", fontSize: "13px",
+              fontWeight: 500, fontFamily: "var(--font-mono)",
+              cursor: "pointer", boxShadow: "0 4px 16px rgba(192,57,43,0.35)",
+            }}
+          >
+            Ligar Sistema
+          </button>
+        )}
       </div>
     </>
   );

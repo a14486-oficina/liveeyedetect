@@ -211,7 +211,7 @@ class LoginBody(BaseModel):
     email: str
     password: str
 
-# ── Endpoint POST /login (substitui o existente) ─────────────────────────────
+# ── Endpoint POST /login ──────────────────────────────────────────────────────
 @app.post("/login")
 def login(body: LoginBody):
     try:
@@ -235,7 +235,7 @@ def login(body: LoginBody):
             "id": user["id_utilizador"],
             "nome": user["nome"],
             "email": user["email"],
-            "foto": user.get("foto"),   # pode ser None se ainda não tiver foto
+            "foto": user.get("foto"),
         }
 
     except Exception as e:
@@ -243,26 +243,155 @@ def login(body: LoginBody):
         return {"erro": "Erro no servidor"}
 
 
-# ── Endpoint POST /registar (para criar o primeiro utilizador) ────────────────
+# ── Schema para registar com convite ─────────────────────────────────────────
+class RegistarBody(BaseModel):
+    email: str
+    password: str
+    nome: str = ""
+    codigo_convite: str = ""
+
+# ── Endpoint POST /registar ───────────────────────────────────────────────────
 @app.post("/registar")
-def registar(body: LoginBody, nome: str = ""):
+def registar(body: RegistarBody):
+    if not body.codigo_convite.strip():
+        return {"erro": "Código de convite obrigatório"}
+
     try:
         db = get_db()
-        cursor = db.cursor()
+        cursor = db.cursor(dictionary=True)
+
+        # Verificar se o código existe e não foi usado
+        cursor.execute(
+            "SELECT * FROM convites WHERE codigo_validacao = %s",
+            (body.codigo_convite.strip().upper(),)
+        )
+        convite = cursor.fetchone()
+
+        if not convite:
+            cursor.close()
+            db.close()
+            return {"erro": "Código de convite inválido"}
+
+        if convite["codigo_usado"]:
+            cursor.close()
+            db.close()
+            return {"erro": "Este código de convite já foi utilizado"}
+
+        # Criar o utilizador
         hashed = pwd_context.hash(body.password[:72])
         cursor.execute(
             "INSERT INTO utilizadores (email, password, nome) VALUES (%s, %s, %s)",
-            (body.email, hashed, nome)
+            (body.email, hashed, body.nome)
+        )
+        novo_id = cursor.lastrowid
+
+        # Marcar o convite como usado
+        cursor.execute(
+            "UPDATE convites SET codigo_usado = TRUE WHERE codigo_validacao = %s",
+            (body.codigo_convite.strip().upper(),)
         )
         db.commit()
+
+        # Devolver os dados do novo utilizador para auto-login
+        cursor.execute(
+            "SELECT id_utilizador, nome, email FROM utilizadores WHERE id_utilizador = %s",
+            (novo_id,)
+        )
+        user = cursor.fetchone()
         cursor.close()
         db.close()
-        return {"status": "ok"}
+
+        return {
+            "status": "ok",
+            "id": user["id_utilizador"],
+            "nome": user["nome"],
+            "email": user["email"],
+        }
+
     except mysql.connector.IntegrityError:
         return {"erro": "Email já registado"}
     except Exception as e:
         print(f"Erro registar: {e}")
-        return (f"Erro registar: {e}")
+        return {"erro": f"Erro registar: {e}"}
+
+
+# ── Schema para gerar convite ─────────────────────────────────────────────────
+class GerarConviteBody(BaseModel):
+    admin_password: str
+
+# ── Endpoint POST /admin/gerar_convite ────────────────────────────────────────
+@app.post("/admin/gerar_convite")
+def gerar_convite(body: GerarConviteBody):
+    """
+    Gera um novo código de convite de uso único.
+    Protegido por uma password de admin definida no .env (ADMIN_PASSWORD).
+    """
+    admin_pass = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_pass or body.admin_password != admin_pass:
+        return {"erro": "Acesso negado"}
+
+    codigo = secrets.token_hex(4).upper()  # ex: A3F9B12C
+
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO convites (codigo_validacao, codigo_usado) VALUES (%s, FALSE)",
+            (codigo,)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"status": "ok", "codigo": codigo}
+    except Exception as e:
+        print(f"Erro gerar_convite: {e}")
+        return {"erro": f"Erro ao gerar convite: {str(e)}"}
+
+
+# ── Endpoint POST /admin/convites ─────────────────────────────────────────────
+# NOTA: usa POST (não GET) para enviar a password de admin no body com segurança
+@app.post("/admin/convites")
+def listar_convites(body: GerarConviteBody):
+    """Lista todos os convites (usados e por usar). Requer password de admin."""
+    admin_pass = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_pass or body.admin_password != admin_pass:
+        return {"erro": "Acesso negado"}
+
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+        # Detecta o nome da coluna PK e se existe created_at
+        cursor.execute("SHOW COLUMNS FROM convites")
+        cols = [row["Field"] for row in cursor.fetchall()]
+        pk = "id_convite" if "id_convite" in cols else "id"
+        has_created = "created_at" in cols
+
+        select_created = ", created_at" if has_created else ""
+        cursor.execute(
+            f"SELECT {pk} AS id, codigo_validacao, codigo_usado{select_created} "
+            f"FROM convites ORDER BY {pk} DESC"
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        db.close()
+
+        # Serializar datetime para string
+        result = []
+        for r in rows:
+            created = r.get("created_at")
+            result.append({
+                "id": r["id"],
+                "codigo_validacao": r["codigo_validacao"],
+                "codigo_usado": bool(r["codigo_usado"]),
+                "created_at": created.isoformat() if created and hasattr(created, "isoformat") else str(created) if created else None,
+            })
+
+        return {"status": "ok", "convites": result}
+    except Exception as e:
+        print(f"Erro listar_convites: {e}")
+        return {"erro": f"Erro no servidor: {str(e)}"}
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -270,7 +399,7 @@ app.add_middleware(
         "https://freya-ethylic-nicolas.ngrok-free.dev",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "http://192.168.1.130:5173",  # frontend na rede local
+        "http://192.168.1.130:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -338,11 +467,10 @@ def recuperar_pedir(body: RecuperarPedirBody):
         cursor.close()
         db.close()
  
-        # Resposta genérica mesmo que o email não exista (segurança)
         if not user:
             return {"status": "ok"}
  
-        codigo  = str(secrets.randbelow(900000) + 100000)  # 6 dígitos
+        codigo  = str(secrets.randbelow(900000) + 100000)
         expires = datetime.datetime.now() + datetime.timedelta(minutes=15)
  
         _codigos_recuperacao[body.email] = {"codigo": codigo, "expires": expires}
@@ -403,7 +531,6 @@ def recuperar_redefinir(body: RecuperarRedefinirBody):
         cursor.close()
         db.close()
  
-        # Apaga o código após uso
         del _codigos_recuperacao[body.email]
         return {"status": "ok"}
  
@@ -414,22 +541,16 @@ def recuperar_redefinir(body: RecuperarRedefinirBody):
 # ── Utilitários ──────────────────────────────────────────────────────────────
 
 def get_next_person_id() -> int:
-    """
-    IDs de pessoa são múltiplos de 10: 10, 20, 30, …
-    Cada foto ocupa person_id*10 + foto_index (0, 1, 2).
-    """
     result = qdrant.scroll(collection_name="pessoas", limit=1000)[0]
     if not result:
         return 10
     ids = [int(p.id) for p in result if str(p.id).isdigit()]
-    # Todos os IDs são do estilo NNN0/NNN1/NNN2 – pegar o maior e subir 10
     max_id = max(ids) if ids else 0
     base = (max_id // 10) * 10
     return base + 10
 
 
 def _encode_image(img_bgr) -> str:
-    """Redimensiona para max 400px de largura e retorna base64 JPEG."""
     h, w = img_bgr.shape[:2]
     if w > 400:
         scale = 400 / w
@@ -439,7 +560,6 @@ def _encode_image(img_bgr) -> str:
 
 
 def _process_upload(contents: bytes):
-    """Devolve (img_bgr, embedding) ou lança ValueError se não detetar rosto."""
     np_arr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -464,21 +584,10 @@ async def criar_pessoa(
     imagem2: Optional[UploadFile] = File(None),
     imagem3: Optional[UploadFile] = File(None),
 ):
-    """
-    Cria 1 a 3 points no Qdrant para a mesma pessoa.
-
-    Esquema de IDs:
-      person_id * 10 + 0  → foto 1 (point principal, tem o payload completo)
-      person_id * 10 + 1  → foto 2 (payload mínimo + person_id_ref)
-      person_id * 10 + 2  → foto 3 (payload mínimo + person_id_ref)
-
-    Assim, a pesquisa por face pode encontrar qualquer um dos 3 embeddings
-    e, através de person_id_ref, recuperar o payload completo.
-    """
     person_id = get_next_person_id()
 
     uploads = [imagem1, imagem2, imagem3]
-    processed = []  # lista de (embedding, img_b64)
+    processed = []
 
     for idx, upload in enumerate(uploads):
         if upload is None:
@@ -500,15 +609,13 @@ async def criar_pessoa(
     except Exception:
         localizacoes_iniciais = []
 
-    # IDs dos points no Qdrant
-    point_id_base = person_id * 10  # ex: 100, 200, 300, …
+    point_id_base = person_id * 10
 
     points = []
     for foto_idx, (embedding, img_b64) in enumerate(processed):
         point_id = point_id_base + foto_idx
 
         if foto_idx == 0:
-            # Point principal – contém o payload completo
             payload = {
                 "person_id": person_id,
                 "foto_index": 0,
@@ -519,21 +626,18 @@ async def criar_pessoa(
                 "ultimas_localizacoes": localizacoes_iniciais,
                 "Desaparecida": True,
                 "Observacoes": observacoes,
-                # Lista com base64 de todas as fotos (preenchida a seguir)
                 "imagens_b64": [],
             }
         else:
-            # Points secundários – payload mínimo
             payload = {
                 "person_id": person_id,
                 "foto_index": foto_idx,
-                "nome": nome,          # duplicado para pesquisa rápida
+                "nome": nome,
                 "Desaparecida": True,
             }
 
         points.append(PointStruct(id=point_id, vector=embedding, payload=payload))
 
-    # Guardar a lista de base64 no payload do point principal
     todas_imagens = [img_b64 for _, img_b64 in processed]
     points[0].payload["imagens_b64"] = todas_imagens
 
@@ -544,12 +648,6 @@ async def criar_pessoa(
 
 @app.get("/pessoas_listar")
 def listar_pessoas():
-    """
-    Lista pessoas desaparecidas.
-    Filtra apenas pelo Qdrant com Desaparecida=True e depois, em Python,
-    seleciona só os points principais (id % 10 == 0), evitando depender
-    de um payload index em foto_index.
-    """
     try:
         result = qdrant.scroll(
             collection_name="pessoas",
@@ -559,7 +657,6 @@ def listar_pessoas():
             limit=300,
             with_payload=True,
         )
-        # Só queremos os points principais: id múltiplo de 10
         return [
             {
                 "id": p.payload.get("person_id"),
@@ -587,7 +684,6 @@ def listar_pessoas_encontradas():
             limit=300,
             with_payload=True,
         )
-        # Só queremos os points principais: id múltiplo de 10
         return [
             {"id": p.payload.get("person_id"), "nome": p.payload.get("nome")}
             for p in (result[0] or [])
@@ -600,7 +696,6 @@ def listar_pessoas_encontradas():
 
 @app.get("/pessoas/{person_id}")
 def get_pessoa(person_id: int):
-    """Recupera o point principal (foto_index 0) pelo person_id."""
     point_id = person_id * 10
     res = qdrant.retrieve(collection_name="pessoas", ids=[point_id], with_payload=True)
     if not res:
@@ -644,10 +739,6 @@ def adicionar_localizacao(person_id: int, lat: Decimal, lon: Decimal, data: str 
 
 @app.post("/pessoas/{person_id}/estado")
 def atualizar_estado(person_id: int):
-    """
-    Marca a pessoa como não desaparecida.
-    Suporta IDs legados (simples) e novos (múltiplos de 10).
-    """
     candidates = [person_id, person_id * 10, person_id * 10 + 1, person_id * 10 + 2]
     existing = qdrant.retrieve(collection_name="pessoas", ids=candidates, with_payload=False)
     ids_to_update = [p.id for p in existing]
@@ -662,11 +753,6 @@ def atualizar_estado(person_id: int):
 
 @app.post("/migrar_ids_legados")
 def migrar_ids_legados():
-    """
-    Migra registos antigos (IDs simples 1, 2, 3…) para o novo esquema
-    de IDs múltiplos de 10 (10, 20, 30…).
-    Chama este endpoint UMA vez após atualizar o servidor.
-    """
     all_points = qdrant.scroll(collection_name="pessoas", limit=1000, with_payload=True)[0]
     all_ids = {int(p.id) for p in all_points}
 
@@ -674,10 +760,10 @@ def migrar_ids_legados():
     for p in all_points:
         pid = int(p.id)
         if pid % 10 == 0:
-            continue  # já é principal novo
+            continue
         principal = (pid // 10) * 10
         if principal in all_ids and principal != 0:
-            continue  # slot secundário válido (foto 2 ou 3)
+            continue
         legacy.append(p)
 
     if not legacy:
@@ -729,8 +815,6 @@ def migrar_ids_legados():
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
 
-# Sala de sinalização WebRTC: guarda os dois clientes (emissor + receiver)
-# para que possam trocar offer/answer/ice candidates entre si.
 _signal_clients: list = []
 
 @app.websocket("/ws-signal")
@@ -741,7 +825,6 @@ async def ws_signal(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_text()
-            # Reencaminha a mensagem para todos os OUTROS clientes na sala
             for other in list(_signal_clients):
                 if other is not ws:
                     try:
@@ -774,8 +857,6 @@ async def websocket_endpoint(ws: WebSocket):
             if frame is None:
                 continue
 
-            # classes=0 → YOLO só corre inferência para a classe "person",
-            # ignorando todos os outros objetos desde o início.
             yolo_results = model(frame, classes=[0])[0]
             detections = []
             alerta_confirmado = False
@@ -783,7 +864,7 @@ async def websocket_endpoint(ws: WebSocket):
             for box in yolo_results.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = float(box.conf[0])
-                cls = int(box.cls[0])  # será sempre 0 (person)
+                cls = int(box.cls[0])
                 name = None
 
                 person_img = frame[y1:y2, x1:x2]
@@ -793,7 +874,6 @@ async def websocket_endpoint(ws: WebSocket):
                     encodings = face_recognition.face_encodings(rgb, face_locations)
 
                     for encoding in encodings:
-                        # Pesquisa em TODOS os points (incluindo fotos 1 e 2)
                         search_result = qdrant.query_points(
                             collection_name="pessoas",
                             query=encoding.tolist(),

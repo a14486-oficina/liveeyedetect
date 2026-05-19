@@ -2,13 +2,26 @@ import { useRef, useState, useEffect } from "react";
 
 import { WS_PROTO, WS_HOST } from "../api.js";
 
-const VideoCapture = () => {
+// Detecta se está a ser usado standalone (Home.jsx) ou dentro do Dashboard
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isMobile;
+};
+
+const VideoCapture = ({ standalone = false }) => {
   const videoRef = useRef(null);
   const [status, setStatus] = useState("A aguardar permissão da câmara...");
   const [active, setActive] = useState(false);
   const [connected, setConnected] = useState(false);
   const wsSignalRef = useRef(null);
   const pcRef = useRef(null);
+  const isMobile = useIsMobile();
 
   const startCamera = async () => {
     try {
@@ -155,6 +168,13 @@ const VideoCapture = () => {
     </InfoCard>
   );
 
+  // Altura do vídeo adapta-se ao contexto:
+  // - standalone (Home.jsx): ocupa o ecrã todo (sem header/bottom nav)
+  // - dentro do Dashboard mobile: desconta header (56px) + bottom nav (64px)
+  const mobileVideoHeight = standalone
+    ? "100svh"
+    : "calc(100svh - 130px)";
+
   return (
     <>
       <style>{`
@@ -168,7 +188,7 @@ const VideoCapture = () => {
         }
         .scan-line { animation: scan-line 3s linear infinite; }
 
-        /* Desktop layout — mirrors Receiver */
+        /* Desktop layout */
         .vc-layout {
           display: flex; gap: 20px; padding: 20px; flex: 1;
         }
@@ -185,7 +205,7 @@ const VideoCapture = () => {
           width: 240px; display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
         }
 
-        /* Mobile layout — mirrors Receiver */
+        /* Mobile layout */
         @media (max-width: 768px) {
           .vc-layout {
             flex-direction: column; padding: 0; gap: 0;
@@ -193,16 +213,7 @@ const VideoCapture = () => {
           .vc-video-area {
             width: 100%; flex: none; gap: 0;
           }
-          .vc-video-box {
-            height: calc(100svh - 130px) !important;
-            width: 100% !important; border-radius: 0;
-            aspect-ratio: unset !important;
-          }
           .vc-side-panel { display: none; }
-          .vc-mobile-action {
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            z-index: 120; white-space: nowrap;
-          }
         }
       `}</style>
 
@@ -212,7 +223,15 @@ const VideoCapture = () => {
 
           {/* Video area */}
           <div className="vc-video-area">
-            <div className="vc-video-box">
+            <div
+              className="vc-video-box"
+              style={isMobile ? {
+                height: mobileVideoHeight,
+                width: "100%",
+                borderRadius: 0,
+                aspectRatio: "unset",
+              } : {}}
+            >
 
               {/* Scan line */}
               {active && (
@@ -255,6 +274,24 @@ const VideoCapture = () => {
 
               <video ref={videoRef} autoPlay playsInline muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
+
+              {/* Mobile status overlay (quando ativo) */}
+              {isMobile && active && (
+                <div style={{
+                  position: "absolute", bottom: "10px", left: "10px",
+                  display: "flex", gap: "6px", zIndex: 20,
+                }}>
+                  <div style={{
+                    background: "rgba(247,246,243,0.9)", backdropFilter: "blur(8px)",
+                    border: "1px solid var(--border)", borderRadius: "99px",
+                    padding: "4px 10px", fontFamily: "var(--font-mono)", fontSize: "11px",
+                    color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "5px",
+                  }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--warning)" }} />
+                    <span>{connected ? "A transmitir" : "A ligar..."}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -267,17 +304,27 @@ const VideoCapture = () => {
 
         </main>
 
-        {/* Mobile action button */}
-        {!active && (
+        {/* Botão mobile — renderizado via React state, não via CSS display */}
+        {isMobile && !active && (
           <button
-            className="vc-mobile-action"
             onClick={startCamera}
             style={{
-              display: "none", /* shown via media query */
-              background: "var(--accent)", border: "none", borderRadius: "99px",
-              color: "#fff", padding: "12px 28px", fontSize: "13px",
-              fontWeight: 500, fontFamily: "var(--font-mono)",
-              cursor: "pointer", boxShadow: "0 4px 16px rgba(192,57,43,0.35)",
+              position: "fixed",
+              bottom: standalone ? "24px" : "80px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 120,
+              whiteSpace: "nowrap",
+              background: "var(--accent)",
+              border: "none",
+              borderRadius: "99px",
+              color: "#fff",
+              padding: "12px 28px",
+              fontSize: "13px",
+              fontWeight: 500,
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+              boxShadow: "0 4px 16px rgba(192,57,43,0.35)",
             }}
           >
             Ligar Sistema

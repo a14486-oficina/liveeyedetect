@@ -38,6 +38,30 @@ const VideoCapture = ({ standalone = false }) => {
     }
   };
 
+  // Faz um sinal de luz com a lanterna: liga/desliga N vezes
+  const flashTorch = async (flashes = 3, onMs = 200, offMs = 150) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      const track = stream.getVideoTracks()[0];
+      if (!track || typeof track.applyConstraints !== "function") return;
+
+      const capabilities = track.getCapabilities?.() ?? {};
+      if (!capabilities.torch) { track.stop(); return; }
+
+      for (let i = 0; i < flashes; i++) {
+        await track.applyConstraints({ advanced: [{ torch: true }] });
+        await new Promise((r) => setTimeout(r, onMs));
+        await track.applyConstraints({ advanced: [{ torch: false }] });
+        if (i < flashes - 1) await new Promise((r) => setTimeout(r, offMs));
+      }
+      track.stop();
+    } catch {
+      // Lanterna não disponível ou permissão negada — silencioso
+    }
+  };
+
   const startWebRTC = async (stream) => {
     const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal");
     wsSignalRef.current = wsSignal;
@@ -47,7 +71,12 @@ const VideoCapture = ({ standalone = false }) => {
 
     const sendChannel = pc.createDataChannel("alertas");
     sendChannel.onmessage = (e) => {
-      if (e.data === "DETETADO" && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      if (e.data === "DETETADO") {
+        // Vibração: 3 pulsos  — on 200ms, off 100ms, on 200ms, off 100ms, on 200ms
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+        // Sinal de luz: 3 flashes
+        flashTorch(3, 200, 150);
+      }
     };
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));

@@ -114,6 +114,15 @@ const Dashboard = () => {
         }
         .mobile-nav-btn.active .mobile-nav-label { color: var(--accent); }
         .mobile-nav-btn.active .mobile-nav-icon { filter: none; }
+
+        /* Mobile top header — dark mode */
+        .dash-mobile-header {
+          background: rgba(247,246,243,0.97);
+          backdrop-filter: blur(12px);
+        }
+        html.dark .dash-mobile-header {
+          background: rgba(20,20,18,0.97);
+        }
       `}</style>
 
       <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
@@ -128,7 +137,7 @@ const Dashboard = () => {
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           alignItems: "center", justifyContent: "space-between",
           padding: "12px 16px",
-          background: "rgba(247,246,243,0.97)", backdropFilter: "blur(12px)",
+
           borderBottom: "1px solid var(--border)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

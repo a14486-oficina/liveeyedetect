@@ -883,11 +883,24 @@ async def websocket_endpoint(ws: WebSocket):
                 cls = int(box.cls[0])
                 name = None
 
-                person_img = frame[y1:y2, x1:x2]
-                if person_img.size > 0:
-                    rgb = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
-                    face_locations = face_recognition.face_locations(rgb, model="hog")
-                    encodings = face_recognition.face_encodings(rgb, face_locations)
+                # Crop só da cabeça (35% superior da bounding box da pessoa)
+                person_h = y2 - y1
+                head_y2 = y1 + int(person_h * 0.35)
+                head_crop = frame[y1:head_y2, x1:x2]
+
+                if head_crop.size > 0:
+                    rgb_head = cv2.cvtColor(head_crop, cv2.COLOR_BGR2RGB)
+
+                    # Tentativa 1: deteção HOG normal no crop da cabeça
+                    face_locations = face_recognition.face_locations(rgb_head, model="hog")
+                    encodings = face_recognition.face_encodings(rgb_head, face_locations)
+
+                    # Tentativa 2: se não detetou cara, força encoding na zona toda (cobre perfis)
+                    if not encodings:
+                        h, w = rgb_head.shape[:2]
+                        if h > 20 and w > 20:
+                            forced_loc = (0, w, h, 0)
+                            encodings = face_recognition.face_encodings(rgb_head, [forced_loc])
 
                     for encoding in encodings:
                         search_result = qdrant.query_points(
@@ -898,7 +911,7 @@ async def websocket_endpoint(ws: WebSocket):
                             ),
                             limit=1,
                         )
-                        if search_result.points and search_result.points[0].score > 0.95:
+                        if search_result.points and search_result.points[0].score > 0.93:
                             matched = search_result.points[0]
                             name = matched.payload.get("nome")
                             alerta_confirmado = True

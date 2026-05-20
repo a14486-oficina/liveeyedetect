@@ -315,6 +315,24 @@ def registar(body: RegistarBody):
         return {"erro": f"Erro registar: {e}"}
 
 
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+
+def verificar_admin(password_inserida: str) -> bool:
+    """Verifica se a password corresponde à do utilizador admin na base de dados."""
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT password FROM utilizadores WHERE email = %s", (ADMIN_EMAIL,))
+        user = cursor.fetchone()
+        cursor.close()
+        db.close()
+        if not user:
+            return False
+        return pwd_context.verify(password_inserida[:72], user["password"])
+    except Exception as e:
+        print(f"Erro verificar_admin: {e}")
+        return False
+
 # ── Schema para gerar convite ─────────────────────────────────────────────────
 class GerarConviteBody(BaseModel):
     admin_password: str
@@ -326,8 +344,7 @@ def gerar_convite(body: GerarConviteBody):
     Gera um novo código de convite de uso único.
     Protegido por uma password de admin definida no .env (ADMIN_PASSWORD).
     """
-    admin_pass = os.getenv("ADMIN_PASSWORD", "")
-    if not admin_pass or body.admin_password != admin_pass:
+    if not verificar_admin(body.admin_password):
         return {"erro": "Acesso negado"}
 
     codigo = secrets.token_hex(4).upper()  # ex: A3F9B12C
@@ -353,8 +370,7 @@ def gerar_convite(body: GerarConviteBody):
 @app.post("/admin/convites")
 def listar_convites(body: GerarConviteBody):
     """Lista todos os convites (usados e por usar). Requer password de admin."""
-    admin_pass = os.getenv("ADMIN_PASSWORD", "")
-    if not admin_pass or body.admin_password != admin_pass:
+    if not verificar_admin(body.admin_password):
         return {"erro": "Acesso negado"}
 
     try:

@@ -24,6 +24,10 @@ export default defineConfig({
       '/utilizador_password':        { target: 'http://localhost:8000', changeOrigin: true },
       '/utilizador_eliminar':        { target: 'http://localhost:8000', changeOrigin: true },
       '/admin':                      { target: 'http://localhost:8000', changeOrigin: true },
+      '/pessoas':                    { target: 'http://localhost:8000', changeOrigin: true },
+      '/atualizar_perfil':           { target: 'http://localhost:8000', changeOrigin: true },
+      '/alterar_password':           { target: 'http://localhost:8000', changeOrigin: true },
+      '/eliminar_conta':             { target: 'http://localhost:8000', changeOrigin: true },
 
       // WebSockets
       '/ws-signal': { target: 'ws://localhost:8000', ws: true, rewriteWsOrigin: true },

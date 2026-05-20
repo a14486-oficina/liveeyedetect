@@ -212,9 +212,9 @@ const UserSettings = () => {
     if (!form.nome.trim() || !form.email.trim()) { setPerfilError("Preenche todos os campos."); return; }
     setPerfilLoading(true);
     try {
-      const res = await fetch(`${API}/utilizadores/${sessionUser.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: form.nome.trim(), email: form.email.trim() }),
+      const res = await fetch(`${API}/atualizar_perfil`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_utilizador: sessionUser.id, nome: form.nome.trim(), email: form.email.trim() }),
       });
       const data = await res.json();
       if (!res.ok || data.erro) throw new Error(data.erro || "Erro ao guardar");
@@ -232,9 +232,9 @@ const UserSettings = () => {
     if (pwForm.nova !== pwForm.confirmar) { setPwError("As palavras-passe não coincidem."); return; }
     setPwLoading(true);
     try {
-      const res = await fetch(`${API}/utilizadores/${sessionUser.id}/password`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password_atual: pwForm.atual, password_nova: pwForm.nova }),
+      const res = await fetch(`${API}/alterar_password`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_utilizador: sessionUser.id, password_atual: pwForm.atual, nova_password: pwForm.nova }),
       });
       const data = await res.json();
       if (!res.ok || data.erro) throw new Error(data.erro || "Erro ao alterar");
@@ -248,9 +248,9 @@ const UserSettings = () => {
   const handleEliminar = async (password) => {
     setElimError(""); setElimLoading(true);
     try {
-      const res = await fetch(`${API}/utilizadores/${sessionUser.id}`, {
-        method: "DELETE", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+      const res = await fetch(`${API}/eliminar_conta`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_utilizador: sessionUser.id, password }),
       });
       const data = await res.json();
       if (!res.ok || data.erro) throw new Error(data.erro || "Erro ao eliminar");

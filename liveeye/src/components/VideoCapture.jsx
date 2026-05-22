@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 
-import { WS_PROTO, WS_HOST } from "../api.js";
+import { WS_PROTO, WS_HOST, API } from "../api.js";
+import { toast } from "../toast.js";
 
 // Detecta se está a ser usado standalone (Home.jsx) ou dentro do Dashboard
 const useIsMobile = () => {
@@ -14,6 +15,17 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (a) => (a * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 const VideoCapture = ({ standalone = false }) => {
   const videoRef = useRef(null);
   const [status, setStatus] = useState("A aguardar permissão da câmara...");
@@ -21,6 +33,8 @@ const VideoCapture = ({ standalone = false }) => {
   const [connected, setConnected] = useState(false);
   const wsSignalRef = useRef(null);
   const pcRef = useRef(null);
+  const sendChannelRef = useRef(null);
+  const ultimasLocaisRef = useRef({}); // { [personId]: { lat, lon } }
   const isMobile = useIsMobile();
 
   const startCamera = async () => {
@@ -70,11 +84,42 @@ const VideoCapture = ({ standalone = false }) => {
     pcRef.current = pc;
 
     const sendChannel = pc.createDataChannel("alertas");
+    sendChannelRef.current = sendChannel;
     sendChannel.onmessage = (e) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        if (parsed.type === "detetado" && Array.isArray(parsed.pessoas)) {
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+          flashTorch(3, 200, 150);
+          const agora = new Date();
+          const data = `${String(agora.getDate()).padStart(2, "0")}/${String(agora.getMonth() + 1).padStart(2, "0")}/${agora.getFullYear()}`;
+          const hora = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lon = pos.coords.longitude;
+              parsed.pessoas.forEach((pessoa) => {
+                if (pessoa.id == null) return;
+                const ultima = ultimasLocaisRef.current[pessoa.id];
+                if (ultima && haversineMeters(ultima.lat, ultima.lon, lat, lon) <= 300) return;
+                fetch(`${API}/pessoas/${pessoa.id}/localizacao?lat=${lat}&lon=${lon}&data=${encodeURIComponent(data)}&hora=${encodeURIComponent(hora)}`, { method: "POST" })
+                  .then((r) => {
+                    if (r.ok) {
+                      ultimasLocaisRef.current[pessoa.id] = { lat, lon };
+                      toast.success(`📍 ${pessoa.name} — localização registada`);
+                    }
+                  })
+                  .catch(() => {});
+              });
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+          );
+          return;
+        }
+      } catch {}
       if (e.data === "DETETADO") {
-        // Vibração: 3 pulsos  — on 200ms, off 100ms, on 200ms, off 100ms, on 200ms
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
-        // Sinal de luz: 3 flashes
         flashTorch(3, 200, 150);
       }
     };
@@ -109,7 +154,10 @@ const VideoCapture = ({ standalone = false }) => {
   };
 
   useEffect(() => {
-    return () => { wsSignalRef.current?.close(); pcRef.current?.close(); };
+    return () => {
+      wsSignalRef.current?.close();
+      pcRef.current?.close();
+    };
   }, []);
 
   const InfoCard = ({ children, title }) => (

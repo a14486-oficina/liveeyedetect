@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { WS_PROTO, WS_HOST } from "../api.js";
+import { WS_PROTO, WS_HOST, API } from "../api.js";
 
 const Receiver = () => {
   const videoRef = useRef(null);
@@ -19,6 +19,7 @@ const Receiver = () => {
   const [fps, setFps] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const fpsCountRef = useRef(0);
+  const personMapRef = useRef({});   // { [nome]: id }
 
   // FPS counter
   useEffect(() => {
@@ -27,6 +28,23 @@ const Receiver = () => {
       fpsCountRef.current = 0;
     }, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Carrega mapa nome→ID para registo automático de localizações
+  useEffect(() => {
+    const load = () => {
+      fetch(`${API}/pessoas_listar`)
+        .then((r) => r.json())
+        .then((data) => {
+          const map = {};
+          data.forEach((p) => { map[p.nome] = p.id; });
+          personMapRef.current = map;
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
   }, []);
 
   // Alert flash
@@ -163,8 +181,13 @@ const Receiver = () => {
 
       if (alertaConfirmado) {
         setAlert(true);
-        if (dataChannelRef.current?.readyState === "open")
-          dataChannelRef.current.send("DETETADO");
+        if (dataChannelRef.current?.readyState === "open") {
+          const pessoas = dets
+            .filter((det) => det.name)
+            .map((det) => ({ id: personMapRef.current[det.name], name: det.name }))
+            .filter((p) => p.id != null);
+          dataChannelRef.current.send(JSON.stringify({ type: "detetado", pessoas }));
+        }
       }
 
       setDetections(dets);

@@ -29,6 +29,20 @@ qdrant = QdrantClient(
 )
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://freya-ethylic-nicolas.ngrok-free.dev",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://192.168.1.130:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 model = YOLO("yolo26n.pt")
 
 
@@ -409,19 +423,6 @@ def listar_convites(body: GerarConviteBody):
         return {"erro": f"Erro no servidor: {str(e)}"}
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://freya-ethylic-nicolas.ngrok-free.dev",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://192.168.1.130:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 _codigos_recuperacao: dict = {}
  
 # ── Schema para recuperação ───────────────────────────────────────────────
@@ -576,11 +577,25 @@ def _encode_image(img_bgr) -> str:
 
 
 def _process_upload(contents: bytes):
+    """Returns (img_bgr, embedding). Raises ValueError if no face detected."""
     np_arr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    encodings = face_recognition.face_encodings(rgb)
+    if img is None:
+        raise ValueError("Ficheiro de imagem inválido ou corrompido")
+
+    # Redimensionar para máx 800px antes do face_recognition — evita bloqueios com fotos grandes
+    h, w = img.shape[:2]
+    if max(h, w) > 800:
+        scale = 800 / max(h, w)
+        img_small = cv2.resize(img, (int(w * scale), int(h * scale)))
+    else:
+        img_small = img
+
+    rgb = cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB)
+    locs = face_recognition.face_locations(rgb, model="hog")
+    encodings = face_recognition.face_encodings(rgb, locs)
     if not encodings:
+        print("AVISO: Nenhum rosto detetado na foto.")
         raise ValueError("Nenhum rosto detetado")
     return img, encodings[0].tolist()
 
@@ -600,7 +615,20 @@ async def criar_pessoa(
     imagem2: Optional[UploadFile] = File(None),
     imagem3: Optional[UploadFile] = File(None),
 ):
-    person_id = get_next_person_id()
+    print(f"\n{'='*60}")
+    print(f"[pessoas_criar] PEDIDO RECEBIDO")
+    print(f"[pessoas_criar] nome={nome!r}, idade={idade}, sexo={sexo!r}")
+    print(f"[pessoas_criar] lat={lat}, lon={lon}")
+    print(f"[pessoas_criar] imagem1={imagem1.filename!r} ({imagem1.content_type})")
+    print(f"[pessoas_criar] imagem2={imagem2.filename if imagem2 else None}")
+    print(f"[pessoas_criar] imagem3={imagem3.filename if imagem3 else None}")
+
+    try:
+        person_id = get_next_person_id()
+        print(f"[pessoas_criar] person_id={person_id}")
+    except Exception as e:
+        print(f"[pessoas_criar] ERRO get_next_person_id: {e}")
+        return {"erro": f"Erro ao gerar ID: {e}"}
 
     uploads = [imagem1, imagem2, imagem3]
     processed = []
@@ -609,15 +637,22 @@ async def criar_pessoa(
         if upload is None:
             continue
         contents = await upload.read()
+        print(f"[pessoas_criar] foto {idx+1}: {len(contents)} bytes lidos")
         if not contents:
+            print(f"[pessoas_criar] foto {idx+1}: VAZIA, a saltar")
             continue
         try:
             img, embedding = _process_upload(contents)
-        except ValueError as e:
+            print(f"[pessoas_criar] foto {idx+1}: processada OK, embedding len={len(embedding)}")
+        except Exception as e:
+            print(f"[pessoas_criar] foto {idx+1}: ERRO _process_upload: {e}")
             return {"erro": f"Foto {idx + 1}: {e}"}
         processed.append((embedding, _encode_image(img)))
 
+    print(f"[pessoas_criar] total fotos processadas: {len(processed)}")
+
     if not processed:
+        print(f"[pessoas_criar] ABORTADO: nenhuma fotografia válida")
         return {"erro": "Nenhuma fotografia válida enviada"}
 
     try:
@@ -657,8 +692,15 @@ async def criar_pessoa(
     todas_imagens = [img_b64 for _, img_b64 in processed]
     points[0].payload["imagens_b64"] = todas_imagens
 
-    qdrant.upsert(collection_name="pessoas", points=points)
+    try:
+        qdrant.upsert(collection_name="pessoas", points=points)
+        print(f"[pessoas_criar] qdrant.upsert OK — person_id={person_id}, fotos={len(processed)}")
+    except Exception as e:
+        print(f"[pessoas_criar] ERRO qdrant.upsert: {e}")
+        return {"erro": f"Erro ao guardar na base de dados: {e}"}
 
+    print(f"[pessoas_criar] CONCLUÍDO com sucesso")
+    print(f"{'='*60}\n")
     return {"status": "ok", "person_id": person_id, "fotos": len(processed)}
 
 
@@ -911,7 +953,7 @@ async def websocket_endpoint(ws: WebSocket):
                             ),
                             limit=1,
                         )
-                        if search_result.points and search_result.points[0].score > 0.93:
+                        if search_result.points and search_result.points[0].score > 0.92:
                             matched = search_result.points[0]
                             name = matched.payload.get("nome")
                             alerta_confirmado = True

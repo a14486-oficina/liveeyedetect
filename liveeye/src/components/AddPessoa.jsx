@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 import { API } from "../api.js";
+import { toast } from "../toast.js";
 
 const s = {
   label: {
@@ -34,7 +35,19 @@ async function processQueue(onSuccess) {
   while (queue.length > 0) {
     const { fd, resolve } = queue.shift();
     try {
-      const res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd });
+      console.log("A enviar para:", `${API}/pessoas_criar`); // ← adiciona isto
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+      let res;
+      try {
+        res = await fetch(`${API}/pessoas_criar`, { method: "POST", body: fd, signal: controller.signal });
+      } catch (fetchErr) {
+        if (fetchErr.name === "AbortError") throw new Error("Tempo limite excedido (90s) — verifica a ligação ao servidor");
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeout);
+      }
+      console.log("Resposta:", res.status);
       const json = await res.json();
       if (!res.ok || json.erro) throw new Error(json.erro || "Erro ao criar");
       resolve({ ok: true });
@@ -118,6 +131,7 @@ const AddPessoa = ({ onNavigate, onRefresh }) => {
   const [fotos, setFotos] = useState([null, null, null]);
   const [locs, setLocs] = useState([]);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [formKey, setFormKey] = useState(0);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -145,15 +159,14 @@ const AddPessoa = ({ onNavigate, onRefresh }) => {
     setFotos([null, null, null]);
     setLocs([]);
     setError("");
-    setFormKey((k) => k + 1); // força remount dos PhotoSlot, limpando os inputs de ficheiro
+    setFormKey((k) => k + 1);
   };
 
-  const submit = () => {
+  const submit = async () => {
     setError("");
     const err = validate();
     if (err) { setError(err); return; }
 
-    // Constrói o FormData agora (antes de limpar o form)
     const fd = new FormData();
     const sexo = form.sexo === "Outro" ? form.sexoOutro : form.sexo;
     fd.append("nome", form.nome.trim());
@@ -171,16 +184,20 @@ const AddPessoa = ({ onNavigate, onRefresh }) => {
       }))
     ));
 
-    // Limpa o formulário e navega imediatamente — sem esperar pelo servidor
-    resetForm();
-    onNavigate();
+    const nomeRegisto = form.nome.trim();
+    setSubmitting(true);
 
-    // Coloca na fila em background; só faz refresh da lista quando o servidor confirmar
-    enqueue(fd, onRefresh).then(({ ok, error }) => {
-      if (!ok) {
-        setError(`Erro ao criar "${fd.get("nome")}": ${error}`);
-      }
-    });
+    const { ok, error: errMsg } = await enqueue(fd, onRefresh);
+    setSubmitting(false);
+
+    if (!ok) {
+      setError(errMsg || "Erro ao criar registo");
+      toast.error(`Erro ao criar "${nomeRegisto}":\n${errMsg}`);
+    } else {
+      toast.success(`"${nomeRegisto}" criado com sucesso!`);
+      resetForm();
+      onNavigate();
+    }
   };
 
   const inputFocus = (e) => e.target.style.borderColor = "var(--accent)";
@@ -317,14 +334,15 @@ const AddPessoa = ({ onNavigate, onRefresh }) => {
             }}>⚠ {error}</div>
           )}
 
-          <button onClick={submit} style={{
-            marginTop: "20px", background: "var(--accent)",
-            border: "none", borderRadius: "7px", color: "#fff", padding: "13px 26px",
+          <button onClick={submit} disabled={submitting} style={{
+            marginTop: "20px", background: submitting ? "var(--bg-raised)" : "var(--accent)",
+            border: submitting ? "1px solid var(--border)" : "none",
+            borderRadius: "7px", color: submitting ? "var(--text-muted)" : "#fff", padding: "13px 26px",
             fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-sans)",
-            cursor: "pointer", transition: "all 0.12s",
+            cursor: submitting ? "not-allowed" : "pointer", transition: "all 0.12s",
             letterSpacing: "0.01em", width: "100%",
           }}>
-            Criar registo
+            {submitting ? "A verificar fotos..." : "Criar registo"}
           </button>
         </div>
       </div>

@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 
 import { API } from "../api.js";
 
-const ADMIN_EMAIL = "a14486@oficina.pt";
-
 const s = {
   label: {
     fontSize: "11px", fontWeight: 500, color: "var(--text-muted)",
@@ -57,7 +55,7 @@ const AdminConvites = () => {
       const raw = sessionStorage.getItem("liveeye_user");
       if (raw) {
         const user = JSON.parse(raw);
-        if (user?.email === ADMIN_EMAIL) setAutorizado(true);
+        if (user?.isAdmin) setAutorizado(true);
       }
     } catch { /* silent */ }
   }, []);

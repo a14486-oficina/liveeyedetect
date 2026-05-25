@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import UserMenu from "./UserMenu";
 
-const ADMIN_EMAIL = "a14486@oficina.pt";
-
 const NAV_GESTAO = [
   { id: "add",      label: "Adicionar",    icon: "＋" },
   { id: "missing",  label: "Desaparecidas", icon: "◎" },
@@ -26,7 +24,7 @@ const Sidebar = ({ active, onNavigate, counts }) => {
       const raw = sessionStorage.getItem("liveeye_user");
       if (raw) {
         const user = JSON.parse(raw);
-        if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+        if (user?.isAdmin) setIsAdmin(true);
       }
     } catch { /* silent */ }
   }, []);

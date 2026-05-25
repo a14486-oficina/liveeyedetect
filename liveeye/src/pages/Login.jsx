@@ -87,7 +87,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
       });
       const data = await res.json();
       if (!res.ok || data.erro) { setError(data.erro || "Credenciais inválidas."); return; }
-      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email }));
+      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email, isAdmin: data.isAdmin, token: data.token }));
       navigate("/dashboard");
     } catch {
       setError("Não foi possível ligar ao servidor.");
@@ -183,7 +183,7 @@ const PainelRegisto = ({ onBack }) => {
       });
       const data = await res.json();
       if (!res.ok || data.erro) { setError(data.erro || "Erro ao criar conta."); return; }
-      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email }));
+      sessionStorage.setItem("liveeye_user", JSON.stringify({ id: data.id, nome: data.nome, email: data.email, isAdmin: data.isAdmin, token: data.token }));
       navigate("/dashboard");
     } catch { setError("Não foi possível ligar ao servidor."); }
     finally { setLoading(false); }

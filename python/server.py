@@ -1,5 +1,9 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File, Request
 from fastapi.middleware.cors import CORSMiddleware
+from collections import defaultdict
+from contextlib import asynccontextmanager
+import asyncio
+import time
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 from ultralytics import YOLO
@@ -28,7 +32,44 @@ qdrant = QdrantClient(
     api_key=os.getenv("QDRANT_API_KEY"),
 )
 
-app = FastAPI()
+_active_tokens: dict = {}
+_rate_limits: defaultdict = defaultdict(list)
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(request: Request, max_attempts: int = 5, window_sec: int = 60) -> bool:
+    ip = _get_client_ip(request)
+    now = time.time()
+    _rate_limits[ip] = [t for t in _rate_limits[ip] if now - t < window_sec]
+    if len(_rate_limits[ip]) >= max_attempts:
+        return False
+    _rate_limits[ip].append(now)
+    return True
+
+
+async def _cleanup_expired_tokens():
+    while True:
+        await asyncio.sleep(3600)
+        now = time.time()
+        expired = [t for t, v in list(_active_tokens.items()) if now - v.get("created_at", 0) > 86400]
+        for t in expired:
+            _active_tokens.pop(t, None)
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    task = asyncio.create_task(_cleanup_expired_tokens())
+    yield
+    task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -227,7 +268,10 @@ class LoginBody(BaseModel):
 
 # ── Endpoint POST /login ──────────────────────────────────────────────────────
 @app.post("/login")
-def login(body: LoginBody):
+def login(request: Request, body: LoginBody):
+    if not _rate_limit(request, max_attempts=5, window_sec=60):
+        return {"erro": "Demasiadas tentativas. Tenta novamente dentro de 1 minuto."}
+
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
@@ -244,12 +288,17 @@ def login(body: LoginBody):
         if not pwd_context.verify(body.password[:72], user["password"]):
             return {"erro": "Credenciais inválidas"}
 
+        token = secrets.token_hex(32)
+        _active_tokens[token] = {"email": user["email"], "id": user["id_utilizador"], "created_at": time.time()}
+
         return {
             "status": "ok",
             "id": user["id_utilizador"],
             "nome": user["nome"],
             "email": user["email"],
             "foto": user.get("foto"),
+            "token": token,
+            "isAdmin": user["email"] == ADMIN_EMAIL,
         }
 
     except Exception as e:
@@ -266,7 +315,10 @@ class RegistarBody(BaseModel):
 
 # ── Endpoint POST /registar ───────────────────────────────────────────────────
 @app.post("/registar")
-def registar(body: RegistarBody):
+def registar(request: Request, body: RegistarBody):
+    if not _rate_limit(request, max_attempts=3, window_sec=60):
+        return {"erro": "Demasiadas tentativas. Tenta novamente dentro de 1 minuto."}
+
     if not body.codigo_convite.strip():
         return {"erro": "Código de convite obrigatório"}
 
@@ -315,11 +367,16 @@ def registar(body: RegistarBody):
         cursor.close()
         db.close()
 
+        token = secrets.token_hex(32)
+        _active_tokens[token] = {"email": user["email"], "id": user["id_utilizador"], "created_at": time.time()}
+
         return {
             "status": "ok",
             "id": user["id_utilizador"],
             "nome": user["nome"],
             "email": user["email"],
+            "token": token,
+            "isAdmin": user["email"] == ADMIN_EMAIL,
         }
 
     except mysql.connector.IntegrityError:
@@ -353,11 +410,14 @@ class GerarConviteBody(BaseModel):
 
 # ── Endpoint POST /admin/gerar_convite ────────────────────────────────────────
 @app.post("/admin/gerar_convite")
-def gerar_convite(body: GerarConviteBody):
+def gerar_convite(request: Request, body: GerarConviteBody):
     """
     Gera um novo código de convite de uso único.
     Protegido por uma password de admin definida no .env (ADMIN_PASSWORD).
     """
+    if not _rate_limit(request, max_attempts=10, window_sec=60):
+        return {"erro": "Demasiadas tentativas. Tenta novamente dentro de 1 minuto."}
+
     if not verificar_admin(body.admin_password):
         return {"erro": "Acesso negado"}
 
@@ -475,7 +535,10 @@ def _enviar_email_codigo(destino: str, codigo: str, nome: str):
  
 # ── POST /recuperar/pedir ─────────────────────────────────────────────────
 @app.post("/recuperar/pedir")
-def recuperar_pedir(body: RecuperarPedirBody):
+def recuperar_pedir(request: Request, body: RecuperarPedirBody):
+    if not _rate_limit(request, max_attempts=3, window_sec=60):
+        return {"erro": "Demasiados pedidos. Tenta novamente dentro de 1 minuto."}
+
     try:
         db     = get_db()
         cursor = db.cursor(dictionary=True)
@@ -877,9 +940,13 @@ _signal_clients: list = []
 
 @app.websocket("/ws-signal")
 async def ws_signal(ws: WebSocket):
+    token = ws.query_params.get("token")
+    if not token or token not in _active_tokens:
+        await ws.close(code=4001)
+        return
     await ws.accept()
     _signal_clients.append(ws)
-    print(f"[ws-signal] Cliente ligado. Total: {len(_signal_clients)}")
+    print(f"[ws-signal] Cliente ligado (token validado). Total: {len(_signal_clients)}")
     try:
         while True:
             data = await ws.receive_text()
@@ -901,8 +968,12 @@ async def ws_signal(ws: WebSocket):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    token = ws.query_params.get("token")
+    if not token or token not in _active_tokens:
+        await ws.close(code=4001)
+        return
     await ws.accept()
-    print("Cliente conectado via WebSocket")
+    print("Cliente conectado via WebSocket (token validado)")
 
     try:
         while True:

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { WS_PROTO, WS_HOST, API } from "../api.js";
+import { WS_PROTO, WS_HOST, API, getToken } from "../api.js";
 
 const Receiver = () => {
   const videoRef = useRef(null);
@@ -62,10 +62,11 @@ const Receiver = () => {
     const ctx = canvas.getContext("2d");
     const captureCtx = capture.getContext("2d");
 
-    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal");
+    const token = getToken();
+    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
     wsSignalRef.current = wsSignal;
 
-    const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws");
+    const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + token);
     wsYoloRef.current = wsYolo;
 
     const pc = new RTCPeerConnection({

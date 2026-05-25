@@ -8,8 +8,6 @@ import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
 import AdminConvites from "../components/Adminconvites.jsx";
 
-const ADMIN_EMAIL = "a14486@oficina.pt";
-
 const Dashboard = () => {
   const [panel, setPanel] = useState("add");
   const [counts, setCounts] = useState({ missing: 0, found: 0 });
@@ -23,7 +21,7 @@ const Dashboard = () => {
       const raw = sessionStorage.getItem("liveeye_user");
       if (raw) {
         const user = JSON.parse(raw);
-        if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+        if (user?.isAdmin) setIsAdmin(true);
       }
     } catch { /* silent */ }
   }, []);

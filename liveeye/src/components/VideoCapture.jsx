@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 
-import { WS_PROTO, WS_HOST, API } from "../api.js";
+import { WS_PROTO, WS_HOST, API, getToken } from "../api.js";
 import { toast } from "../toast.js";
 
 // Detecta se está a ser usado standalone (Home.jsx) ou dentro do Dashboard
@@ -77,7 +77,8 @@ const VideoCapture = ({ standalone = false }) => {
   };
 
   const startWebRTC = async (stream) => {
-    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal");
+    const token = getToken();
+    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
     wsSignalRef.current = wsSignal;
 
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
@@ -101,7 +102,7 @@ const VideoCapture = ({ standalone = false }) => {
               parsed.pessoas.forEach((pessoa) => {
                 if (pessoa.id == null) return;
                 const ultima = ultimasLocaisRef.current[pessoa.id];
-                if (ultima && haversineMeters(ultima.lat, ultima.lon, lat, lon) <= 300) return;
+                if (ultima && haversineMeters(ultima.lat, ultima.lon, lat, lon) <= 150) return;
                 fetch(`${API}/pessoas/${pessoa.id}/localizacao?lat=${lat}&lon=${lon}&data=${encodeURIComponent(data)}&hora=${encodeURIComponent(hora)}`, { method: "POST" })
                   .then((r) => {
                     if (r.ok) {

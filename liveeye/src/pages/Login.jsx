@@ -54,16 +54,15 @@ const inputBlur  = (e) => (e.target.style.borderColor = "var(--border)");
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const Logo = () => (
-  <div style={{ position: "relative", display: "inline-block", marginBottom: "16px" }}>
-    <div style={{
-      width: "48px", height: "48px", borderRadius: "12px", background: "var(--accent)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: "22px", color: "#fff", margin: "0 auto",
-    }}>◎</div>
-    <div style={{
-      position: "absolute", inset: 0, borderRadius: "12px", background: "var(--accent)",
-      animation: "pulse-ring 2.5s ease-out infinite", opacity: 0.25,
-    }} />
+  <div style={{ marginBottom: "16px", display: "flex", justifyContent: "center" }}>
+    <img src="/logo-light.png" alt="LiveDetect" className="logo-light"
+      style={{ height: "72px", width: "auto" }} />
+    <img src="/logo-dark.png" alt="LiveDetect" className="logo-dark"
+      style={{ height: "72px", width: "auto", display: "none" }} />
+    <style>{`
+      html.dark .logo-light { display: none !important; }
+      html.dark .logo-dark  { display: block !important; }
+    `}</style>
   </div>
 );
 
@@ -447,22 +446,6 @@ const Login = () => {
       `}</style>
 
       <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
-
-        <header style={{
-          display: "flex", alignItems: "center", padding: "14px 20px",
-          background: "var(--bg-surface)", borderBottom: "1px solid var(--border)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{
-              width: "26px", height: "26px", borderRadius: "6px", background: "var(--accent)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", color: "#fff",
-            }}>◎</div>
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)" }}>
-              LiveEye{" "}
-              <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>{subtitles[painel]}</span>
-            </span>
-          </div>
-        </header>
 
         <main className="login-main" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div key={painel} className="login-card" style={{

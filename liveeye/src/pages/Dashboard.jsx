@@ -43,6 +43,12 @@ const Dashboard = () => {
     setSidebarOpen(false);
   };
 
+  const handleLogout = () => {
+    sessionStorage.removeItem("liveeye_user");
+    sessionStorage.removeItem("liveeye_panel");
+    window.location.href = "/";
+  };
+
   const isFullscreen = panel === "receiver" || panel === "camera";
 
   const MOBILE_NAV = [
@@ -124,6 +130,8 @@ const Dashboard = () => {
         html.dark .dash-mobile-header {
           background: rgba(20,20,18,0.97);
         }
+        html.dark .logo-light { display: none !important; }
+        html.dark .logo-dark  { display: block !important; }
       `}</style>
 
       <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
@@ -137,30 +145,32 @@ const Dashboard = () => {
         <header className="dash-mobile-header" style={{
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           alignItems: "center", justifyContent: "space-between",
-          padding: "12px 16px",
-
+          padding: "8px 16px",
           borderBottom: "1px solid var(--border)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <img
-              src="/logo-light.png"
-              alt="LiveDetect"
-              className="logo-light"
-              style={{ height: "28px", width: "auto" }}
-            />
-            <img
-              src="/logo-dark.png"
-              alt="LiveDetect"
-              className="logo-dark"
-              style={{ height: "28px", width: "auto", display: "none" }}
-            />
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <img src="/logo-light-mobile.png" alt="LiveDetect" className="logo-light"
+              style={{ height: "44px", width: "auto" }} />
+            <img src="/logo-dark-mobile.png" alt="LiveDetect" className="logo-dark"
+              style={{ height: "44px", width: "auto", display: "none" }} />
           </div>
-          <button onClick={() => handleNavigate("settings")} style={{
-            background: panel === "settings" ? "var(--accent-light)" : "var(--bg-raised)",
-            border: "1px solid var(--border)",
-            borderRadius: "7px", color: panel === "settings" ? "var(--accent)" : "var(--text-secondary)",
-            padding: "7px 12px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
-          }}>⚙</button>
+
+          {/* Botões direita */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button onClick={() => handleNavigate("settings")} style={{
+              background: panel === "settings" ? "var(--accent-light)" : "var(--bg-raised)",
+              border: "1px solid var(--border)", borderRadius: "7px",
+              color: panel === "settings" ? "var(--accent)" : "var(--text-secondary)",
+              padding: "7px 12px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
+            }}>⚙</button>
+            <button onClick={handleLogout} style={{
+              background: "var(--bg-raised)",
+              border: "1px solid var(--border)", borderRadius: "7px",
+              color: "var(--text-secondary)",
+              padding: "7px 12px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
+            }}>→</button>
+          </div>
         </header>
 
         {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}

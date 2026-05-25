@@ -142,15 +142,18 @@ const Dashboard = () => {
           borderBottom: "1px solid var(--border)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{
-              width: "24px", height: "24px", borderRadius: "6px",
-              background: "var(--accent)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px",
-              color: "#fff",
-            }}>◎</div>
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
-              LiveEye
-            </span>
+            <img
+              src="/logo-light.png"
+              alt="LiveDetect"
+              className="logo-light"
+              style={{ height: "28px", width: "auto" }}
+            />
+            <img
+              src="/logo-dark.png"
+              alt="LiveDetect"
+              className="logo-dark"
+              style={{ height: "28px", width: "auto", display: "none" }}
+            />
           </div>
           <button onClick={() => handleNavigate("settings")} style={{
             background: panel === "settings" ? "var(--accent-light)" : "var(--bg-raised)",

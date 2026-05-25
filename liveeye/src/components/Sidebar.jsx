@@ -49,17 +49,34 @@ const Sidebar = ({ active, onNavigate, counts }) => {
         borderBottom: "1px solid var(--border)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px" }}>
-          <div style={{
-            width: "26px", height: "26px", borderRadius: "6px",
-            background: "var(--accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "11px", color: "#fff",
-          }}>◎</div>
+          {/* Logo claro (modo light) */}
+          <img
+            src="/logo-light.png"
+            alt="LiveDetect"
+            className="logo-light"
+            style={{ height: "52px", width: "auto", display: "block" }}
+          />
+          {/* Logo escuro (modo dark) */}
+          <img
+            src="/logo-dark.png"
+            alt="LiveDetect"
+            className="logo-dark"
+            style={{ height: "52px", width: "auto", display: "none" }}
+          />
+          <style>{`
+            html.dark .logo-light { display: none !important; }
+            html.dark .logo-dark  { display: block !important; }
+          `}</style>
           <span style={{
-            fontFamily: "var(--font-sans)", fontSize: "15px",
-            fontWeight: 600, color: "var(--text-primary)",
-          }}>LiveEye</span>
+            fontFamily: "var(--font-sans)",
+            fontSize: "15px",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+          }}>
+            Live Eye Detect
+          </span>
         </div>
+
         <span style={{
           fontSize: "10px", color: "var(--text-muted)",
           letterSpacing: "0.1em", textTransform: "uppercase",

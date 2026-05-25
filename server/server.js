@@ -62,7 +62,23 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+// Heartbeat para detetar clientes desligados
+const heartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+            console.log("Cliente sem resposta — a terminar ligação");
+            return ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
+
+wss.on("close", () => clearInterval(heartbeat));
+
 wss.on("connection", (ws) => {
+    ws.isAlive = true;
+    ws.on("pong", () => { ws.isAlive = true; });
     console.log("Cliente conectado");
 
     ws.on("message", (message) => {

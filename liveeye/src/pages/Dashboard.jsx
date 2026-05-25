@@ -9,7 +9,9 @@ import Receiver from "./Receiver";
 import AdminConvites from "../components/Adminconvites.jsx";
 
 const Dashboard = () => {
-  const [panel, setPanel] = useState("add");
+  const [panel, setPanel] = useState(() => {
+    return sessionStorage.getItem("liveeye_panel") || "add";
+  });
   const [counts, setCounts] = useState({ missing: 0, found: 0 });
   const desaparecedasRef = useRef(null);
   const encontradasRef = useRef(null);
@@ -37,6 +39,7 @@ const Dashboard = () => {
 
   const handleNavigate = (p) => {
     setPanel(p);
+    sessionStorage.setItem("liveeye_panel", p);
     setSidebarOpen(false);
   };
 

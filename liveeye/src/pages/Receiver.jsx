@@ -56,192 +56,248 @@ const Receiver = () => {
   }, [alert]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    const canvas = overlayRef.current;
-    const capture = captureRef.current;
-    const ctx = canvas.getContext("2d");
-    const captureCtx = capture.getContext("2d");
-
-    const token = getToken();
-    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
-    wsSignalRef.current = wsSignal;
-
-    const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + token);
-    wsYoloRef.current = wsYolo;
-
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
-    pcRef.current = pc;
-
-    pc.ondatachannel = (event) => {
-      dataChannelRef.current = event.channel;
-      dataChannelRef.current.onopen = () => console.log("Data channel aberto");
-    };
-
-    // Arranca o loop de frames quando AMBOS estiverem prontos: vídeo + WS YOLO
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    let active = true;
     let videoReady = false;
     let yoloReady = false;
+    let resizeFn = null;
 
-    const tryStartLoop = () => {
-      if (videoReady && yoloReady) {
-        setTimeout(sendFrame, 200);
+    const cleanup = () => {
+      if (resizeFn) window.removeEventListener("resize", resizeFn);
+      if (wsSignalRef.current) {
+        wsSignalRef.current.onopen = null;
+        wsSignalRef.current.onmessage = null;
+        wsSignalRef.current.onclose = null;
+        wsSignalRef.current.onerror = null;
+        wsSignalRef.current.close();
+        wsSignalRef.current = null;
       }
+      if (wsYoloRef.current) {
+        wsYoloRef.current.onopen = null;
+        wsYoloRef.current.onmessage = null;
+        wsYoloRef.current.onclose = null;
+        wsYoloRef.current.onerror = null;
+        wsYoloRef.current.close();
+        wsYoloRef.current = null;
+      }
+      if (pcRef.current) {
+        pcRef.current.onicecandidate = null;
+        pcRef.current.ontrack = null;
+        pcRef.current.ondatachannel = null;
+        pcRef.current.onconnectionstatechange = null;
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      dataChannelRef.current = null;
+      isWaitingRef.current = false;
     };
 
-    pc.ontrack = (event) => {
-      video.srcObject = event.streams[0];
-      video.onloadedmetadata = () => {
-        video.play();
-        setConnected(true);
-        setStatus("Vídeo recebido");
-        videoReady = true;
+    const scheduleReconnect = () => {
+      if (!active) return;
+      clearTimeout(reconnectTimer);
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+      reconnectAttempts += 1;
+      reconnectTimer = setTimeout(setup, delay);
+    };
+
+    const setup = () => {
+      if (!active) return;
+      cleanup();
+
+      const video = videoRef.current;
+      const canvas = overlayRef.current;
+      const capture = captureRef.current;
+      if (!video || !canvas || !capture) return;
+      const ctx = canvas.getContext("2d");
+      const captureCtx = capture.getContext("2d");
+
+      const token = getToken();
+      const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
+      wsSignalRef.current = wsSignal;
+
+      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + token);
+      wsYoloRef.current = wsYolo;
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+      pcRef.current = pc;
+
+      pc.ondatachannel = (event) => {
+        dataChannelRef.current = event.channel;
+        dataChannelRef.current.onopen = () => console.log("Data channel aberto");
+      };
+
+      const tryStartLoop = () => {
+        if (videoReady && yoloReady) {
+          setTimeout(sendFrame, 200);
+        }
+      };
+
+      pc.ontrack = (event) => {
+        video.srcObject = event.streams[0];
+        video.onloadedmetadata = () => {
+          video.play();
+          setConnected(true);
+          setStatus("Vídeo recebido");
+          videoReady = true;
+          tryStartLoop();
+        };
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && wsSignal.readyState === WebSocket.OPEN)
+          wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          scheduleReconnect();
+        }
+      };
+
+      wsSignal.onmessage = async (message) => {
+        const data = JSON.parse(message.data);
+        if (data.type === "offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          wsSignal.send(JSON.stringify({ type: "answer", answer }));
+          setStatus("Ligação estabelecida");
+        } else if (data.type === "ice") {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+      };
+
+      wsSignal.onclose = () => scheduleReconnect();
+      wsSignal.onerror = () => {};
+
+      const sendFrame = () => {
+        if (video.videoWidth === 0 || wsYolo.readyState !== WebSocket.OPEN || isWaitingRef.current) return;
+        isWaitingRef.current = true;
+        capture.width = video.videoWidth;
+        capture.height = video.videoHeight;
+        captureCtx.drawImage(video, 0, 0);
+        const dataURL = capture.toDataURL("image/jpeg", 0.5);
+        wsYolo.send(dataURL);
+      };
+
+      wsYolo.onopen = () => {
+        reconnectAttempts = 0;
+        yoloReady = true;
         tryStartLoop();
       };
-    };
+      wsYolo.onclose = () => scheduleReconnect();
+      wsYolo.onerror = () => {};
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate)
-        wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
-    };
+      wsYolo.onmessage = (event) => {
+        isWaitingRef.current = false;
+        fpsCountRef.current += 1;
 
-    wsSignal.onmessage = async (message) => {
-      const data = JSON.parse(message.data);
-      if (data.type === "offer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        wsSignal.send(JSON.stringify({ type: "answer", answer }));
-        setStatus("Ligação estabelecida");
-      } else if (data.type === "ice") {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
-    };
+        const resposta = JSON.parse(event.data);
+        const dets = resposta.detections || [];
+        const alertaConfirmado = resposta.dispararAlerta;
 
-    const resizeCanvas = () => {
-      const rect = video.getBoundingClientRect();
-      const containerW = rect.width;
-      const containerH = rect.height;
-      const videoW = video.videoWidth || 1;
-      const videoH = video.videoHeight || 1;
-      const videoAspect = videoW / videoH;
-      const containerAspect = containerW / containerH;
-
-      let renderW, renderH, offsetX, offsetY;
-      if (videoAspect < containerAspect) {
-        renderH = containerH;
-        renderW = containerH * videoAspect;
-        offsetX = (containerW - renderW) / 2;
-        offsetY = 0;
-      } else {
-        renderW = containerW;
-        renderH = containerW / videoAspect;
-        offsetX = 0;
-        offsetY = (containerH - renderH) / 2;
-      }
-
-      canvas.width = containerW;
-      canvas.height = containerH;
-      canvas.style.width = containerW + "px";
-      canvas.style.height = containerH + "px";
-      canvas._offsetX = offsetX;
-      canvas._offsetY = offsetY;
-      canvas._scaleX = renderW / videoW;
-      canvas._scaleY = renderH / videoH;
-    };
-
-    video.addEventListener("loadeddata", resizeCanvas);
-    video.addEventListener("loadedmetadata", resizeCanvas);
-    window.addEventListener("resize", resizeCanvas);
-
-    const sendFrame = () => {
-      if (video.videoWidth === 0 || wsYolo.readyState !== WebSocket.OPEN || isWaitingRef.current) return;
-      isWaitingRef.current = true;
-      capture.width = video.videoWidth;
-      capture.height = video.videoHeight;
-      captureCtx.drawImage(video, 0, 0);
-      const dataURL = capture.toDataURL("image/jpeg", 0.5);
-      wsYolo.send(dataURL);
-    };
-
-    wsYolo.onopen  = () => {
-      console.log("YOLO WebSocket ligado");
-      yoloReady = true;
-      tryStartLoop();
-    };
-    wsYolo.onclose = () => console.log("YOLO WebSocket fechado");
-    wsYolo.onerror = () => setStatus("Erro WebSocket YOLO");
-
-    wsYolo.onmessage = (event) => {
-      isWaitingRef.current = false;
-      fpsCountRef.current += 1;
-
-      const resposta = JSON.parse(event.data);
-      const dets = resposta.detections || [];
-      const alertaConfirmado = resposta.dispararAlerta;
-
-      if (alertaConfirmado) {
-        setAlert(true);
-        if (dataChannelRef.current?.readyState === "open") {
-          const pessoas = dets
-            .filter((det) => det.name)
-            .map((det) => ({ id: personMapRef.current[det.name], name: det.name }))
-            .filter((p) => p.id != null);
-          dataChannelRef.current.send(JSON.stringify({ type: "detetado", pessoas }));
+        if (alertaConfirmado) {
+          setAlert(true);
+          if (dataChannelRef.current?.readyState === "open") {
+            const pessoas = dets
+              .filter((det) => det.name)
+              .map((det) => ({ id: personMapRef.current[det.name], name: det.name }))
+              .filter((p) => p.id != null);
+            dataChannelRef.current.send(JSON.stringify({ type: "detetado", pessoas }));
+          }
         }
-      }
 
-      setDetections(dets);
+        setDetections(dets);
 
-      const scaleX = canvas._scaleX ?? (canvas.width / (video.videoWidth || 1));
-      const scaleY = canvas._scaleY ?? (canvas.height / (video.videoHeight || 1));
-      const offX   = canvas._offsetX ?? 0;
-      const offY   = canvas._offsetY ?? 0;
+        const scaleX = canvas._scaleX ?? (canvas.width / (video.videoWidth || 1));
+        const scaleY = canvas._scaleY ?? (canvas.height / (video.videoHeight || 1));
+        const offX   = canvas._offsetX ?? 0;
+        const offY   = canvas._offsetY ?? 0;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      dets.forEach((det) => {
-        const x = det.x * scaleX + offX;
-        const y = det.y * scaleY + offY;
-        const w = det.w * scaleX;
-        const h = det.h * scaleY;
-        const isKnown = !!det.name;
+        dets.forEach((det) => {
+          const x = det.x * scaleX + offX;
+          const y = det.y * scaleY + offY;
+          const w = det.w * scaleX;
+          const h = det.h * scaleY;
+          const isKnown = !!det.name;
 
-        ctx.strokeStyle = isKnown ? "#2d7a4f" : "#c0392b";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, w, h);
+          ctx.strokeStyle = isKnown ? "#2d7a4f" : "#c0392b";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, w, h);
 
-        const cs = 12;
-        ctx.lineWidth = 3;
-        [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy], i) => {
-          ctx.beginPath();
-          ctx.moveTo(cx + (i % 2 === 0 ? cs : -cs), cy);
-          ctx.lineTo(cx, cy);
-          ctx.lineTo(cx, cy + (i < 2 ? cs : -cs));
-          ctx.stroke();
+          const cs = 12;
+          ctx.lineWidth = 3;
+          [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy], i) => {
+            ctx.beginPath();
+            ctx.moveTo(cx + (i % 2 === 0 ? cs : -cs), cy);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx, cy + (i < 2 ? cs : -cs));
+            ctx.stroke();
+          });
+
+          if (det.name) {
+            ctx.fillStyle = isKnown ? "rgba(45,122,79,0.9)" : "rgba(192,57,43,0.9)";
+            const label = det.name;
+            ctx.font = "500 12px 'DM Mono', monospace";
+            const tw = ctx.measureText(label).width;
+            ctx.fillRect(x, y - 22, tw + 12, 22);
+            ctx.fillStyle = "#fff";
+            ctx.fillText(label, x + 6, y - 6);
+          }
         });
 
-        if (det.name) {
-          ctx.fillStyle = isKnown ? "rgba(45,122,79,0.9)" : "rgba(192,57,43,0.9)";
-          const label = det.name;
-          ctx.font = "500 12px 'DM Mono', monospace";
-          const tw = ctx.measureText(label).width;
-          ctx.fillRect(x, y - 22, tw + 12, 22);
-          ctx.fillStyle = "#fff";
-          ctx.fillText(label, x + 6, y - 6);
-        }
-      });
+        setTimeout(sendFrame, 50);
+      };
 
-      setTimeout(sendFrame, 50);
+      const resizeCanvas = () => {
+        const rect = video.getBoundingClientRect();
+        const containerW = rect.width;
+        const containerH = rect.height;
+        const videoW = video.videoWidth || 1;
+        const videoH = video.videoHeight || 1;
+        const videoAspect = videoW / videoH;
+        const containerAspect = containerW / containerH;
+
+        let renderW, renderH, offsetX, offsetY;
+        if (videoAspect < containerAspect) {
+          renderH = containerH;
+          renderW = containerH * videoAspect;
+          offsetX = (containerW - renderW) / 2;
+          offsetY = 0;
+        } else {
+          renderW = containerW;
+          renderH = containerW / videoAspect;
+          offsetX = 0;
+          offsetY = (containerH - renderH) / 2;
+        }
+
+        canvas.width = containerW;
+        canvas.height = containerH;
+        canvas.style.width = containerW + "px";
+        canvas.style.height = containerH + "px";
+        canvas._offsetX = offsetX;
+        canvas._offsetY = offsetY;
+        canvas._scaleX = renderW / videoW;
+        canvas._scaleY = renderH / videoH;
+      };
+
+      resizeFn = resizeCanvas;
+      video.addEventListener("loadeddata", resizeCanvas);
+      video.addEventListener("loadedmetadata", resizeCanvas);
+      window.addEventListener("resize", resizeCanvas);
     };
 
-    // loop gerido por tryStartLoop() — listener "play" removido
+    setup();
 
     return () => {
-      wsSignal.close();
-      wsYolo.close();
-      pc.close();
-      window.removeEventListener("resize", resizeCanvas);
+      active = false;
+      clearTimeout(reconnectTimer);
+      cleanup();
     };
   }, []);
 

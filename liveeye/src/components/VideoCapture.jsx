@@ -34,7 +34,11 @@ const VideoCapture = ({ standalone = false }) => {
   const wsSignalRef = useRef(null);
   const pcRef = useRef(null);
   const sendChannelRef = useRef(null);
+  const streamRef = useRef(null);
   const ultimasLocaisRef = useRef({}); // { [personId]: { lat, lon } }
+  const reconnectTimerRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const activeRef = useRef(false);
   const isMobile = useIsMobile();
 
   const startCamera = async () => {
@@ -46,6 +50,8 @@ const VideoCapture = ({ standalone = false }) => {
       videoRef.current.srcObject = stream;
       setStatus("Câmara ativa. A ligar...");
       setActive(true);
+      activeRef.current = true;
+      streamRef.current = stream;
       startWebRTC(stream);
     } catch (err) {
       setStatus("Erro ao aceder à câmara: " + err.message);
@@ -76,7 +82,37 @@ const VideoCapture = ({ standalone = false }) => {
     }
   };
 
-  const startWebRTC = async (stream) => {
+  const startWebRTC = (stream) => {
+    const cleanup = () => {
+      setConnected(false);
+      if (wsSignalRef.current) {
+        wsSignalRef.current.onopen = null;
+        wsSignalRef.current.onmessage = null;
+        wsSignalRef.current.onclose = null;
+        wsSignalRef.current.onerror = null;
+        wsSignalRef.current.close();
+        wsSignalRef.current = null;
+      }
+      if (pcRef.current) {
+        pcRef.current.onicecandidate = null;
+        pcRef.current.onconnectionstatechange = null;
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      sendChannelRef.current = null;
+    };
+
+    const scheduleReconnect = () => {
+      if (!activeRef.current) return;
+      clearTimeout(reconnectTimerRef.current);
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+      reconnectAttemptsRef.current += 1;
+      console.log(`VideoCapture a religar em ${delay}ms (tentativa ${reconnectAttemptsRef.current})`);
+      reconnectTimerRef.current = setTimeout(() => startWebRTC(stream), delay);
+    };
+
+    cleanup();
+
     const token = getToken();
     const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
     wsSignalRef.current = wsSignal;
@@ -128,8 +164,15 @@ const VideoCapture = ({ standalone = false }) => {
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.onicecandidate = (event) => {
-      if (event.candidate)
+      if (event.candidate && wsSignal.readyState === WebSocket.OPEN)
         wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        console.log("VideoCapture WebRTC estado:", pc.connectionState, "- a religar...");
+        scheduleReconnect();
+      }
     };
 
     const sendOffer = async () => {
@@ -139,8 +182,16 @@ const VideoCapture = ({ standalone = false }) => {
       setStatus("À espera do receiver...");
     };
 
-    if (wsSignal.readyState === WebSocket.OPEN) sendOffer();
-    else wsSignal.onopen = sendOffer;
+    wsSignal.onopen = () => {
+      reconnectAttemptsRef.current = 0;
+      sendOffer();
+    };
+
+    wsSignal.onclose = () => {
+      console.log("VideoCapture Signal WS fechado, a religar...");
+      scheduleReconnect();
+    };
+    wsSignal.onerror = () => {};
 
     wsSignal.onmessage = async (message) => {
       const data = JSON.parse(message.data);
@@ -156,8 +207,24 @@ const VideoCapture = ({ standalone = false }) => {
 
   useEffect(() => {
     return () => {
-      wsSignalRef.current?.close();
-      pcRef.current?.close();
+      activeRef.current = false;
+      clearTimeout(reconnectTimerRef.current);
+      if (wsSignalRef.current) {
+        wsSignalRef.current.onopen = null;
+        wsSignalRef.current.onmessage = null;
+        wsSignalRef.current.onclose = null;
+        wsSignalRef.current.onerror = null;
+        wsSignalRef.current.close();
+        wsSignalRef.current = null;
+      }
+      if (pcRef.current) {
+        pcRef.current.onicecandidate = null;
+        pcRef.current.onconnectionstatechange = null;
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      sendChannelRef.current = null;
+      streamRef.current = null;
     };
   }, []);
 

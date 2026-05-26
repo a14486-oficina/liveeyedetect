@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 import { WS_PROTO, WS_HOST, API, getToken } from "../api.js";
+
+const MODE_SELECT = "select";
+const MODE_WATCHING = "watching";
 
 const Receiver = () => {
   const videoRef = useRef(null);
@@ -11,7 +14,11 @@ const Receiver = () => {
   const pcRef = useRef(null);
   const dataChannelRef = useRef(null);
   const isWaitingRef = useRef(false);
+  const streamIdRef = useRef(null);
 
+  const [mode, setMode] = useState(MODE_SELECT);
+  const [streams, setStreams] = useState([]);
+  const [selectedStream, setSelectedStream] = useState(null);
   const [status, setStatus] = useState("A aguardar ligação...");
   const [connected, setConnected] = useState(false);
   const [alert, setAlert] = useState(false);
@@ -55,24 +62,121 @@ const Receiver = () => {
     }
   }, [alert]);
 
+  // ── Signal WebSocket (persistente, não depende do mode) ──
+  const registeredRoomRef = useRef(null);
+
   useEffect(() => {
+    let ws = null;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    let active = true;
+
+    const connect = () => {
+      if (!active) return;
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
+
+      const token = getToken();
+      ws = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
+      wsSignalRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        const room = registeredRoomRef.current;
+        if (room) {
+          ws.send(JSON.stringify({ type: "register", role: "receiver", streamId: room }));
+        }
+      };
+
+      ws.onmessage = (message) => {
+        const data = JSON.parse(message.data);
+        if (data.type === "streams") {
+          setStreams(data.streams || []);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!active) return;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        reconnectAttempts += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
+      ws.onerror = () => {};
+    };
+
+    connect();
+
+    return () => {
+      active = false;
+      clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
+    };
+  }, []);
+
+  // ── Polling da lista de streams (só em modo select) ──
+  useEffect(() => {
+    if (mode !== MODE_SELECT) return;
+    const interval = setInterval(() => {
+      const ws = wsSignalRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "list" }));
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [mode]);
+
+  // ── Ligar a uma stream específica ──
+  const connectToStream = useCallback((streamId) => {
+    setSelectedStream(streamId);
+    streamIdRef.current = streamId;
+    registeredRoomRef.current = streamId;
+    setMode(MODE_WATCHING);
+    setConnected(false);
+    setDetections([]);
+    setAlert(false);
+    setStatus("A ligar à stream...");
+
+    const ws = wsSignalRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "register", role: "receiver", streamId }));
+    }
+  }, []);
+
+  // ── Voltar à lista ──
+  const backToList = useCallback(() => {
+    setMode(MODE_SELECT);
+    setSelectedStream(null);
+    streamIdRef.current = null;
+    setConnected(false);
+    setDetections([]);
+    setAlert(false);
+  }, []);
+
+  // ── WebRTC + YOLO (só quando está em modo watching) ──
+  useEffect(() => {
+    if (mode !== MODE_WATCHING) return;
+
     let reconnectTimer = null;
     let reconnectAttempts = 0;
     let active = true;
     let videoReady = false;
     let yoloReady = false;
     let resizeFn = null;
+    let currentStreamId = streamIdRef.current;
 
     const cleanup = () => {
       if (resizeFn) window.removeEventListener("resize", resizeFn);
-      if (wsSignalRef.current) {
-        wsSignalRef.current.onopen = null;
-        wsSignalRef.current.onmessage = null;
-        wsSignalRef.current.onclose = null;
-        wsSignalRef.current.onerror = null;
-        wsSignalRef.current.close();
-        wsSignalRef.current = null;
-      }
       if (wsYoloRef.current) {
         wsYoloRef.current.onopen = null;
         wsYoloRef.current.onmessage = null;
@@ -112,11 +216,11 @@ const Receiver = () => {
       const ctx = canvas.getContext("2d");
       const captureCtx = capture.getContext("2d");
 
-      const token = getToken();
-      const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
-      wsSignalRef.current = wsSignal;
+      const wsSignal = wsSignalRef.current;
+      const sid = streamIdRef.current;
+      if (!sid) return;
 
-      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + token);
+      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + getToken());
       wsYoloRef.current = wsYolo;
 
       const pc = new RTCPeerConnection({
@@ -147,8 +251,9 @@ const Receiver = () => {
       };
 
       pc.onicecandidate = (event) => {
-        if (event.candidate && wsSignal.readyState === WebSocket.OPEN)
-          wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+        if (event.candidate && wsSignal?.readyState === WebSocket.OPEN) {
+          wsSignal.send(JSON.stringify({ type: "ice", streamId: sid, candidate: event.candidate }));
+        }
       };
 
       pc.onconnectionstatechange = () => {
@@ -157,21 +262,32 @@ const Receiver = () => {
         }
       };
 
-      wsSignal.onmessage = async (message) => {
+      // Usar o signal ws para mensagens da sala
+      const onSignalMessage = (message) => {
         const data = JSON.parse(message.data);
+        if (data.streamId !== sid) return;
         if (data.type === "offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          wsSignal.send(JSON.stringify({ type: "answer", answer }));
-          setStatus("Ligação estabelecida");
+          pc.setRemoteDescription(new RTCSessionDescription(data.offer)).then(() => {
+            return pc.createAnswer();
+          }).then((answer) => {
+            return pc.setLocalDescription(answer);
+          }).then(() => {
+            if (wsSignal?.readyState === WebSocket.OPEN) {
+              wsSignal.send(JSON.stringify({ type: "answer", streamId: sid, answer: pc.localDescription }));
+            }
+            setStatus("Ligação estabelecida");
+          }).catch((err) => {
+            console.error("Erro no handshake offer/answer:", err);
+            scheduleReconnect();
+          });
         } else if (data.type === "ice") {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
         }
       };
 
-      wsSignal.onclose = () => scheduleReconnect();
-      wsSignal.onerror = () => {};
+      if (wsSignal) {
+        wsSignal.onmessage = onSignalMessage;
+      }
 
       const sendFrame = () => {
         if (video.videoWidth === 0 || wsYolo.readyState !== WebSocket.OPEN || isWaitingRef.current) return;
@@ -297,9 +413,10 @@ const Receiver = () => {
     return () => {
       active = false;
       clearTimeout(reconnectTimer);
+      videoRef.current.srcObject = null;
       cleanup();
     };
-  }, []);
+  }, [mode]);
 
   const InfoCard = ({ children, title }) => (
     <div style={{
@@ -380,6 +497,197 @@ const Receiver = () => {
     </InfoCard>
   );
 
+  // ── Stream Select Screen ──
+  const streamSelectScreen = (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      flex: 1, padding: "40px 20px",
+    }}>
+      <div style={{ fontSize: "28px", marginBottom: "8px", color: "var(--text-muted)" }}>📡</div>
+      <h2 style={{ fontSize: "18px", fontWeight: 500, color: "var(--text-primary)", marginBottom: "4px" }}>Streams Ativas</h2>
+      <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: "24px" }}>
+        {streams.length === 0 ? "Nenhuma stream disponível" : `Seleciona uma stream para visualizar`}
+      </p>
+
+      {streams.length === 0 ? (
+        <div style={{
+          padding: "24px", textAlign: "center", borderRadius: "10px",
+          border: "1px dashed var(--border)", background: "var(--bg-surface)", maxWidth: "360px", width: "100%",
+        }}>
+          <p style={{ fontSize: "13px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+            Aguarda que um emissor inicie a transmissão...
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "400px", width: "100%" }}>
+          {streams.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => connectToStream(s.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "12px 16px", borderRadius: "10px", border: "1px solid var(--border)",
+                background: "var(--bg-surface)", cursor: "pointer", textAlign: "left",
+                transition: "all 0.12s", width: "100%",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--accent-border)"}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
+            >
+              <div style={{
+                width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+                background: "var(--accent-light)", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "16px",
+              }}>⬤</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{s.id}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                  {s.since_seconds < 60 ? `Há ${s.since_seconds}s` : `Há ${Math.floor(s.since_seconds / 60)}min`}
+                </div>
+              </div>
+              <span style={{ fontSize: "18px", color: "var(--text-muted)" }}>→</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Watching Screen ──
+  const watchingScreen = (
+    <>
+      <main className="receiver-layout">
+
+        {/* Video area */}
+        <div className="receiver-video-area">
+          {/* Botão voltar */}
+          <button onClick={backToList} style={{
+            alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "6px",
+            background: "var(--bg-surface)", border: "1px solid var(--border)",
+            borderRadius: "7px", padding: "6px 12px", cursor: "pointer",
+            color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: "11px",
+            marginBottom: "4px",
+          }}>
+            ← Voltar
+          </button>
+
+          <div className="receiver-video-box">
+
+            {/* Stream badge */}
+            {selectedStream && (
+              <div style={{
+                position: "absolute", top: "8px", left: "8px", zIndex: 25,
+                background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
+                borderRadius: "6px", padding: "4px 8px",
+              }}>
+                <span style={{ fontSize: "10px", color: "#fff", fontFamily: "var(--font-mono)", opacity: 0.7 }}>📡 </span>
+                <span style={{ fontSize: "11px", color: "#fff", fontFamily: "var(--font-mono)", fontWeight: 500 }}>{selectedStream}</span>
+              </div>
+            )}
+
+            {/* Scan line */}
+            {connected && (
+              <div className="scan-line" style={{
+                position: "absolute", left: 0, width: "100%", height: "1px",
+                background: "linear-gradient(90deg, transparent, rgba(192,57,43,0.25), transparent)",
+                pointerEvents: "none", zIndex: 10,
+              }} />
+            )}
+
+            {/* Corner decorations */}
+            {[
+              { top: 0,    left: 0,    borderTop: true,    borderLeft: true  },
+              { top: 0,    right: 0,   borderTop: true,    borderRight: true },
+              { bottom: 0, left: 0,    borderBottom: true, borderLeft: true  },
+              { bottom: 0, right: 0,   borderBottom: true, borderRight: true },
+            ].map((pos, i) => (
+              <div key={i} style={{
+                position: "absolute", width: "18px", height: "18px", zIndex: 20, margin: "7px",
+                ...pos,
+                borderTop:    pos.borderTop    ? "1.5px solid var(--accent-border)" : "none",
+                borderBottom: pos.borderBottom ? "1.5px solid var(--accent-border)" : "none",
+                borderLeft:   pos.borderLeft   ? "1.5px solid var(--accent-border)" : "none",
+                borderRight:  pos.borderRight  ? "1.5px solid var(--accent-border)" : "none",
+              }} />
+            ))}
+
+            {/* Waiting state */}
+            {!connected && (
+              <div style={{
+                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: "10px", zIndex: 10,
+              }}>
+                <div style={{ fontSize: "32px", color: "var(--border-strong)" }}>◎</div>
+                <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
+                  {status}
+                </p>
+              </div>
+            )}
+
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }} />
+            <canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} />
+
+            {/* Alert banner */}
+            {alert && (
+              <div style={{
+                position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
+                zIndex: 30, display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 20px", borderRadius: "99px",
+                background: "var(--accent)", boxShadow: "0 4px 16px rgba(192,57,43,0.3)",
+              }}>
+                <span style={{ color: "#fff", fontWeight: 600, fontSize: "13px", letterSpacing: "0.06em" }}>
+                  ⚠ FACE RECONHECIDA
+                </span>
+              </div>
+            )}
+
+            {/* Mobile stats overlay */}
+            <div className="receiver-mobile-stats">
+              <div className="stat-pill">
+                <span>{fps} FPS</span>
+              </div>
+              <div className="stat-pill" style={{ color: detections.length > 0 ? "var(--accent)" : undefined }}>
+                <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--accent)" }} />
+                <span>{detections.length} det.</span>
+              </div>
+            </div>
+          </div>
+
+          <canvas ref={captureRef} style={{ display: "none" }} />
+        </div>
+
+        {/* Desktop side panel */}
+        <div className="receiver-side-panel">
+          {statsBar}
+          {detectionsList}
+          {systemInfo}
+        </div>
+      </main>
+
+      {/* Mobile FAB to toggle bottom sheet */}
+      <button
+        className={`receiver-fab${detections.length > 0 ? " has-detections" : ""}`}
+        onClick={() => setPanelOpen((o) => !o)}
+        style={{ background: detections.length > 0 ? "var(--accent)" : "var(--bg-surface)", color: detections.length > 0 ? "#fff" : "var(--text-secondary)", border: "1px solid var(--border)" }}
+      >
+        {panelOpen ? "✕" : "≡"}
+      </button>
+
+      {/* Mobile bottom sheet */}
+      {panelOpen && (
+        <>
+          <div onClick={() => setPanelOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 109 }} />
+          <div className="receiver-bottom-sheet">
+            <div style={{ width: "36px", height: "4px", background: "var(--border-strong)", borderRadius: "99px", margin: "0 auto 14px" }} />
+            {statsBar}
+            {detectionsList}
+            {systemInfo}
+          </div>
+        </>
+      )}
+    </>
+  );
+
   return (
     <>
       <style>{`
@@ -402,7 +710,6 @@ const Receiver = () => {
         .scan-line   { animation: scan-line 3s linear infinite; }
         .alert-flash { animation: alert-flash 0.4s ease-in-out 3; }
 
-        /* Desktop layout */
         .receiver-layout {
           display: flex; gap: 20px; padding: 20px; flex: 1;
         }
@@ -422,7 +729,6 @@ const Receiver = () => {
         .receiver-bottom-sheet { display: none; }
         .receiver-mobile-stats { display: none; }
 
-        /* Mobile layout */
         @media (max-width: 768px) {
           .receiver-layout {
             flex-direction: column; padding: 0; gap: 0;
@@ -478,113 +784,8 @@ const Receiver = () => {
           }} />
         )}
 
-        <main className="receiver-layout">
+        {mode === MODE_SELECT ? streamSelectScreen : watchingScreen}
 
-          {/* Video area */}
-          <div className="receiver-video-area">
-            <div className="receiver-video-box">
-
-              {/* Scan line */}
-              {connected && (
-                <div className="scan-line" style={{
-                  position: "absolute", left: 0, width: "100%", height: "1px",
-                  background: "linear-gradient(90deg, transparent, rgba(192,57,43,0.25), transparent)",
-                  pointerEvents: "none", zIndex: 10,
-                }} />
-              )}
-
-              {/* Corner decorations */}
-              {[
-                { top: 0,    left: 0,    borderTop: true,    borderLeft: true  },
-                { top: 0,    right: 0,   borderTop: true,    borderRight: true },
-                { bottom: 0, left: 0,    borderBottom: true, borderLeft: true  },
-                { bottom: 0, right: 0,   borderBottom: true, borderRight: true },
-              ].map((pos, i) => (
-                <div key={i} style={{
-                  position: "absolute", width: "18px", height: "18px", zIndex: 20, margin: "7px",
-                  ...pos,
-                  borderTop:    pos.borderTop    ? "1.5px solid var(--accent-border)" : "none",
-                  borderBottom: pos.borderBottom ? "1.5px solid var(--accent-border)" : "none",
-                  borderLeft:   pos.borderLeft   ? "1.5px solid var(--accent-border)" : "none",
-                  borderRight:  pos.borderRight  ? "1.5px solid var(--accent-border)" : "none",
-                }} />
-              ))}
-
-              {/* Waiting state */}
-              {!connected && (
-                <div style={{
-                  position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center", gap: "10px", zIndex: 10,
-                }}>
-                  <div style={{ fontSize: "32px", color: "var(--border-strong)" }}>◎</div>
-                  <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
-                    A aguardar stream...
-                  </p>
-                </div>
-              )}
-
-              <video ref={videoRef} autoPlay playsInline muted
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }} />
-              <canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} />
-
-              {/* Alert banner */}
-              {alert && (
-                <div style={{
-                  position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)",
-                  zIndex: 30, display: "flex", alignItems: "center", gap: "8px",
-                  padding: "8px 20px", borderRadius: "99px",
-                  background: "var(--accent)", boxShadow: "0 4px 16px rgba(192,57,43,0.3)",
-                }}>
-                  <span style={{ color: "#fff", fontWeight: 600, fontSize: "13px", letterSpacing: "0.06em" }}>
-                    ⚠ FACE RECONHECIDA
-                  </span>
-                </div>
-              )}
-
-              {/* Mobile stats overlay */}
-              <div className="receiver-mobile-stats">
-                <div className="stat-pill">
-                  <span>{fps} FPS</span>
-                </div>
-                <div className="stat-pill" style={{ color: detections.length > 0 ? "var(--accent)" : undefined }}>
-                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--accent)" }} />
-                  <span>{detections.length} det.</span>
-                </div>
-              </div>
-            </div>
-
-            <canvas ref={captureRef} style={{ display: "none" }} />
-          </div>
-
-          {/* Desktop side panel */}
-          <div className="receiver-side-panel">
-            {statsBar}
-            {detectionsList}
-            {systemInfo}
-          </div>
-        </main>
-
-        {/* Mobile FAB to toggle bottom sheet */}
-        <button
-          className={`receiver-fab${detections.length > 0 ? " has-detections" : ""}`}
-          onClick={() => setPanelOpen((o) => !o)}
-          style={{ background: detections.length > 0 ? "var(--accent)" : "var(--bg-surface)", color: detections.length > 0 ? "#fff" : "var(--text-secondary)", border: "1px solid var(--border)" }}
-        >
-          {panelOpen ? "✕" : "≡"}
-        </button>
-
-        {/* Mobile bottom sheet */}
-        {panelOpen && (
-          <>
-            <div onClick={() => setPanelOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 109 }} />
-            <div className="receiver-bottom-sheet">
-              <div style={{ width: "36px", height: "4px", background: "var(--border-strong)", borderRadius: "99px", margin: "0 auto 14px" }} />
-              {statsBar}
-              {detectionsList}
-              {systemInfo}
-            </div>
-          </>
-        )}
       </div>
     </>
   );

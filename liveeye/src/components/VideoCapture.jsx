@@ -26,8 +26,17 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const genStreamId = () => {
+  const user = (() => { try { return JSON.parse(sessionStorage.getItem("liveeye_user")); } catch { return null; } })();
+  const name = user?.nome || "anon";
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${name}-${rand}`;
+};
+
 const VideoCapture = ({ standalone = false }) => {
   const videoRef = useRef(null);
+  const streamIdRef = useRef(genStreamId());
+  const [streamId] = useState(streamIdRef.current);
   const [status, setStatus] = useState("A aguardar permissão da câmara...");
   const [active, setActive] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -120,9 +129,7 @@ const VideoCapture = ({ standalone = false }) => {
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     pcRef.current = pc;
 
-    const sendChannel = pc.createDataChannel("alertas");
-    sendChannelRef.current = sendChannel;
-    sendChannel.onmessage = (e) => {
+    const onDataChannelMessage = (e) => {
       try {
         const parsed = JSON.parse(e.data);
         if (parsed.type === "detetado" && Array.isArray(parsed.pessoas)) {
@@ -161,11 +168,17 @@ const VideoCapture = ({ standalone = false }) => {
       }
     };
 
+    const sendChannel = pc.createDataChannel("alertas");
+    sendChannelRef.current = sendChannel;
+    sendChannel.onmessage = onDataChannelMessage;
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && wsSignal.readyState === WebSocket.OPEN)
-        wsSignal.send(JSON.stringify({ type: "ice", candidate: event.candidate }));
+      if (event.candidate && wsSignal.readyState === WebSocket.OPEN) {
+        const sid = streamIdRef.current;
+        wsSignal.send(JSON.stringify({ type: "ice", streamId: sid, candidate: event.candidate }));
+      }
     };
 
     pc.onconnectionstatechange = () => {
@@ -178,12 +191,15 @@ const VideoCapture = ({ standalone = false }) => {
     const sendOffer = async () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      wsSignal.send(JSON.stringify({ type: "offer", offer }));
+      const sid = streamIdRef.current;
+      wsSignal.send(JSON.stringify({ type: "offer", streamId: sid, offer }));
       setStatus("À espera do receiver...");
     };
 
     wsSignal.onopen = () => {
       reconnectAttemptsRef.current = 0;
+      const sid = streamIdRef.current;
+      wsSignal.send(JSON.stringify({ type: "register", role: "emitter", streamId: sid }));
       sendOffer();
     };
 
@@ -195,13 +211,45 @@ const VideoCapture = ({ standalone = false }) => {
 
     wsSignal.onmessage = async (message) => {
       const data = JSON.parse(message.data);
+
+      if (data.type === "receiver_joined") {
+        // Receiver entrou depois de a offer já ter sido enviada — reenviar offer
+        console.log("VideoCapture: receiver_joined — a reenviar offer");
+        if (pcRef.current) {
+          pcRef.current.onicecandidate = null;
+          pcRef.current.onconnectionstatechange = null;
+          pcRef.current.close();
+        }
+        const newPc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        pcRef.current = newPc;
+        const newSendChannel = newPc.createDataChannel("alertas");
+        sendChannelRef.current = newSendChannel;
+        // Reutilizar o mesmo handler de mensagens do canal de dados
+        newSendChannel.onmessage = onDataChannelMessage;
+        stream.getTracks().forEach((track) => newPc.addTrack(track, stream));
+        newPc.onicecandidate = (event) => {
+          if (event.candidate && wsSignal.readyState === WebSocket.OPEN) {
+            wsSignal.send(JSON.stringify({ type: "ice", streamId: streamIdRef.current, candidate: event.candidate }));
+          }
+        };
+        newPc.onconnectionstatechange = () => {
+          if (newPc.connectionState === "failed" || newPc.connectionState === "disconnected") {
+            scheduleReconnect();
+          }
+        };
+        const offer = await newPc.createOffer();
+        await newPc.setLocalDescription(offer);
+        wsSignal.send(JSON.stringify({ type: "offer", streamId: streamIdRef.current, offer }));
+        return;
+      }
+
       if (data.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
         setStatus("Ligado ao receiver!");
         setConnected(true);
       }
       if (data.type === "ice")
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
     };
   };
 
@@ -281,6 +329,7 @@ const VideoCapture = ({ standalone = false }) => {
         ["WebRTC",  connected ? "Ligado"  : "Desligado", connected],
         ["Câmara",  active    ? "Ativa"   : "Inativa",   active],
         ["Stream",  connected ? "A enviar": "Parado",    connected],
+        ["Código",  streamId,  true],
       ].map(([label, val, ok]) => (
         <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
@@ -419,6 +468,19 @@ const VideoCapture = ({ standalone = false }) => {
 
               <video ref={videoRef} autoPlay playsInline muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
+
+              {/* Stream code badge (sempre visível quando ativo) */}
+              {active && (
+                <div style={{
+                  position: "absolute", top: "10px", left: "10px", zIndex: 20,
+                  background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+                  borderRadius: "7px", padding: "6px 10px",
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}>
+                  <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em", textTransform: "uppercase" }}>📡</span>
+                  <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>{streamId}</span>
+                </div>
+              )}
 
               {/* Mobile status overlay (quando ativo) */}
               {isMobile && active && (

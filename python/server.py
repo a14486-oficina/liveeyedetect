@@ -936,7 +936,8 @@ def migrar_ids_legados():
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
 
-_signal_clients: list = []
+_signal_rooms: dict[str, dict] = {}
+# { stream_id: {"clients": {ws: role}, "created_at": timestamp} }
 
 @app.websocket("/ws-signal")
 async def ws_signal(ws: WebSocket):
@@ -945,25 +946,72 @@ async def ws_signal(ws: WebSocket):
         await ws.close(code=4001)
         return
     await ws.accept()
-    _signal_clients.append(ws)
-    print(f"[ws-signal] Cliente ligado (token validado). Total: {len(_signal_clients)}")
+    
+    my_room: str | None = None
+    my_role: str | None = None
+    
+    print(f"[ws-signal] Cliente ligado (token validado)")
+    
     try:
         while True:
-            data = await ws.receive_text()
-            for other in list(_signal_clients):
-                if other is not ws:
-                    try:
-                        await other.send_text(data)
-                    except Exception:
-                        pass
+            raw = await ws.receive_text()
+            data = json.loads(raw)
+            msg_type = data.get("type")
+            
+            if msg_type == "register":
+                stream_id = data["streamId"]
+                role = data.get("role", "receiver")
+                
+                if stream_id not in _signal_rooms:
+                    _signal_rooms[stream_id] = {"clients": {}, "created_at": time.time()}
+                
+                _signal_rooms[stream_id]["clients"][ws] = role
+                my_room = stream_id
+                my_role = role
+                print(f"[ws-signal] {role} entrou na sala {stream_id}")
+                
+                # Se um receiver entrou numa sala que já tem emitter,
+                # avisa o emitter para reenviar a offer (resolve race condition)
+                if role == "receiver":
+                    for client, r in list(_signal_rooms[stream_id]["clients"].items()):
+                        if r == "emitter" and client is not ws:
+                            try:
+                                await client.send_json({"type": "receiver_joined", "streamId": stream_id})
+                                print(f"[ws-signal] Notificado emitter para reenviar offer na sala {stream_id}")
+                            except Exception:
+                                pass
+                
+            elif msg_type == "list":
+                active = []
+                now = time.time()
+                for sid, room in list(_signal_rooms.items()):
+                    emitters = [c for c, r in room["clients"].items() if r == "emitter"]
+                    if emitters:
+                        age_sec = int(now - room["created_at"])
+                        active.append({"id": sid, "since_seconds": age_sec})
+                await ws.send_json({"type": "streams", "streams": active})
+                
+            elif msg_type in ("offer", "answer", "ice"):
+                route_to = data.get("streamId")
+                if route_to and route_to in _signal_rooms:
+                    for client, role in list(_signal_rooms[route_to]["clients"].items()):
+                        if client is not ws:
+                            try:
+                                await client.send_text(raw)
+                            except Exception:
+                                pass
+                            
     except WebSocketDisconnect:
-        print("[ws-signal] Cliente desligado.")
+        print(f"[ws-signal] Cliente desligado (sala: {my_room})")
     except Exception as e:
         print(f"[ws-signal] Erro: {e}")
     finally:
-        if ws in _signal_clients:
-            _signal_clients.remove(ws)
-        print(f"[ws-signal] Clientes restantes: {len(_signal_clients)}")
+        if my_room and my_room in _signal_rooms:
+            _signal_rooms[my_room]["clients"].pop(ws, None)
+            if not _signal_rooms[my_room]["clients"]:
+                del _signal_rooms[my_room]
+                print(f"[ws-signal] Sala {my_room} eliminada (vazia)")
+        print(f"[ws-signal] Salas ativas: {len(_signal_rooms)}")
 
 
 @app.websocket("/ws")

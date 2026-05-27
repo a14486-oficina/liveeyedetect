@@ -514,10 +514,10 @@ const Receiver = () => {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       flex: 1, padding: "40px 20px",
     }}>
-      <div style={{ fontSize: "28px", marginBottom: "8px", color: "var(--text-muted)" }}>📡</div>
-      <h2 style={{ fontSize: "18px", fontWeight: 500, color: "var(--text-primary)", marginBottom: "4px" }}>Streams Ativas</h2>
+      
+      <h2 style={{ fontSize: "18px", fontWeight: 500, color: "var(--text-primary)", marginBottom: "4px" }}>Transmissões Ativas</h2>
       <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: "24px" }}>
-        {streams.length === 0 ? "Nenhuma stream disponível" : `Seleciona uma stream para visualizar`}
+        {streams.length === 0 ? "Nenhuma transmissão disponível" : `Seleciona uma transmissão para visualizar`}
       </p>
 
       {streams.length === 0 ? (

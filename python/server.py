@@ -941,11 +941,12 @@ _signal_rooms: dict[str, dict] = {}
 
 @app.websocket("/ws-signal")
 async def ws_signal(ws: WebSocket):
-    token = ws.query_params.get("token")
+    protocols = ws.headers.get("sec-websocket-protocol", "")
+    token = protocols.split(",")[0].strip() if protocols else ""
     if not token or token not in _active_tokens:
         await ws.close(code=4001)
         return
-    await ws.accept()
+    await ws.accept(subprotocol=token)
     
     my_room: str | None = None
     my_role: str | None = None
@@ -1016,11 +1017,12 @@ async def ws_signal(ws: WebSocket):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    token = ws.query_params.get("token")
+    protocols = ws.headers.get("sec-websocket-protocol", "")
+    token = protocols.split(",")[0].strip() if protocols else ""
     if not token or token not in _active_tokens:
         await ws.close(code=4001)
         return
-    await ws.accept()
+    await ws.accept(subprotocol=token)
     print("Cliente conectado via WebSocket (token validado)")
 
     try:

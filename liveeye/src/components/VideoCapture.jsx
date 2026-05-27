@@ -182,7 +182,7 @@ const VideoCapture = ({ standalone = false }) => {
 
   const startDetection = () => {
     const token = getToken();
-    const ws = new WebSocket(`${WS_PROTO}${WS_HOST}/ws?token=${token}`);
+    const ws = new WebSocket(`${WS_PROTO}${WS_HOST}/ws`, [token]);
     wsDetectRef.current = ws;
 
     ws.onopen = () => {
@@ -245,7 +245,7 @@ const VideoCapture = ({ standalone = false }) => {
     cleanup();
 
     const token = getToken();
-    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
+    const wsSignal = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal", [token]);
     wsSignalRef.current = wsSignal;
 
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });

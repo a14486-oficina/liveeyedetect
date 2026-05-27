@@ -82,7 +82,7 @@ const Receiver = () => {
       }
 
       const token = getToken();
-      ws = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal?token=" + token);
+      ws = new WebSocket(WS_PROTO + WS_HOST + "/ws-signal", [token]);
       wsSignalRef.current = ws;
 
       ws.onopen = () => {
@@ -220,7 +220,7 @@ const Receiver = () => {
       const sid = streamIdRef.current;
       if (!sid) return;
 
-      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws?token=" + getToken());
+      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws", [getToken()]);
       wsYoloRef.current = wsYolo;
 
       const pc = new RTCPeerConnection({

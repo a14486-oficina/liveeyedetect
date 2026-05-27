@@ -1081,6 +1081,7 @@ async def websocket_endpoint(ws: WebSocket):
                 detections.append({
                     "x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1,
                     "conf": conf, "cls": cls, "name": name,
+                    "person_id": matched.payload.get("person_id") if name else None,
                 })
 
             await ws.send_json({

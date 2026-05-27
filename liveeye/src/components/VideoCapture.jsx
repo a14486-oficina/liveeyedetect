@@ -40,14 +40,18 @@ const VideoCapture = ({ standalone = false }) => {
   const [status, setStatus] = useState("A aguardar permissão da câmara...");
   const [active, setActive] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [detectReady, setDetectReady] = useState(false);
   const wsSignalRef = useRef(null);
   const pcRef = useRef(null);
   const sendChannelRef = useRef(null);
   const streamRef = useRef(null);
   const ultimasLocaisRef = useRef({}); // { [personId]: { lat, lon } }
+  const wsDetectRef = useRef(null);
+  const detectCanvasRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const activeRef = useRef(false);
+  const audioCtxRef = useRef(null);
   const isMobile = useIsMobile();
 
   const startCamera = async () => {
@@ -60,8 +64,19 @@ const VideoCapture = ({ standalone = false }) => {
       setStatus("Câmara ativa. A ligar...");
       setActive(true);
       activeRef.current = true;
+      // Desbloquear vibração e AudioContext dentro do gesto do utilizador
+      try { navigator.vibrate(1); } catch {}
+      try {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        const buf = audioCtxRef.current.createBuffer(1, 1, 22050);
+        const src = audioCtxRef.current.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtxRef.current.destination);
+        src.start(0);
+      } catch {}
       streamRef.current = stream;
       startWebRTC(stream);
+      startDetection();
     } catch (err) {
       setStatus("Erro ao aceder à câmara: " + err.message);
     }
@@ -89,6 +104,113 @@ const VideoCapture = ({ standalone = false }) => {
     } catch {
       // Lanterna não disponível ou permissão negada — silencioso
     }
+  };
+
+  const sendDetectionFrame = () => {
+    const video = videoRef.current;
+    const ws = wsDetectRef.current;
+    if (!video || !ws || ws.readyState !== WebSocket.OPEN || !activeRef.current) return;
+    if (video.videoWidth === 0) {
+      setTimeout(sendDetectionFrame, 500);
+      return;
+    }
+    const canvas = detectCanvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    ws.send(canvas.toDataURL("image/jpeg", 0.5));
+  };
+
+  const handleDetectAlert = (detections) => {
+    try {
+      if (navigator.vibrate) {
+        navigator.vibrate([300, 100, 300, 100, 300]);
+      }
+      try {
+        const ctx = audioCtxRef.current;
+        if (ctx) {
+          if (ctx.state === "suspended") ctx.resume();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          gain.gain.setValueAtTime(0.4, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        }
+      } catch {}
+      flashTorch(3, 200, 150);
+      toast.success("⚠️ Pessoa desaparecida detetada!");
+
+      const pessoas = detections
+        .filter((det) => det.name && det.person_id)
+        .map((det) => ({ id: det.person_id, name: det.name }));
+
+      if (pessoas.length === 0) return;
+
+      const agora = new Date();
+      const data = `${String(agora.getDate()).padStart(2, "0")}/${String(agora.getMonth() + 1).padStart(2, "0")}/${agora.getFullYear()}`;
+      const hora = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          pessoas.forEach((pessoa) => {
+            if (pessoa.id == null) return;
+            const ultima = ultimasLocaisRef.current[pessoa.id];
+            if (ultima && haversineMeters(ultima.lat, ultima.lon, lat, lon) <= 150) return;
+            fetch(`${API}/pessoas/${pessoa.id}/localizacao?lat=${lat}&lon=${lon}&data=${encodeURIComponent(data)}&hora=${encodeURIComponent(hora)}`, { method: "POST" })
+              .then((r) => {
+                if (r.ok) {
+                  ultimasLocaisRef.current[pessoa.id] = { lat, lon };
+                  toast.success(`📍 ${pessoa.name} — localização registada`);
+                }
+              })
+              .catch(() => {});
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      );
+    } catch (e) {
+      console.error("[handleDetectAlert] Erro:", e);
+    }
+  };
+
+  const startDetection = () => {
+    const token = getToken();
+    const ws = new WebSocket(`${WS_PROTO}${WS_HOST}/ws?token=${token}`);
+    wsDetectRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("[detect-ws] Ligado");
+      setDetectReady(true);
+      toast.success("Detecção automática ativa");
+      sendDetectionFrame();
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.dispararAlerta) {
+        handleDetectAlert(data.detections || []);
+      }
+      if (wsDetectRef.current?.readyState === WebSocket.OPEN && activeRef.current) {
+        setTimeout(sendDetectionFrame, 1000);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("[detect-ws] Fechado");
+      setDetectReady(false);
+      if (activeRef.current) {
+        setTimeout(startDetection, 3000);
+      }
+    };
+
+    ws.onerror = () => {};
   };
 
   const startWebRTC = (stream) => {
@@ -135,6 +257,7 @@ const VideoCapture = ({ standalone = false }) => {
         if (parsed.type === "detetado" && Array.isArray(parsed.pessoas)) {
           if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
           flashTorch(3, 200, 150);
+          toast.success("⚠️ Pessoa detetada (data channel)");
           const agora = new Date();
           const data = `${String(agora.getDate()).padStart(2, "0")}/${String(agora.getMonth() + 1).padStart(2, "0")}/${agora.getFullYear()}`;
           const hora = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
@@ -273,6 +396,14 @@ const VideoCapture = ({ standalone = false }) => {
       }
       sendChannelRef.current = null;
       streamRef.current = null;
+      if (wsDetectRef.current) {
+        wsDetectRef.current.onopen = null;
+        wsDetectRef.current.onmessage = null;
+        wsDetectRef.current.onclose = null;
+        wsDetectRef.current.onerror = null;
+        wsDetectRef.current.close();
+        wsDetectRef.current = null;
+      }
     };
   }, []);
 
@@ -328,6 +459,7 @@ const VideoCapture = ({ standalone = false }) => {
       {[
         ["WebRTC",  connected ? "Ligado"  : "Desligado", connected],
         ["Câmara",  active    ? "Ativa"   : "Inativa",   active],
+        ["Detecção", detectReady ? "Ativa" : "Inativa",  detectReady],
         ["Stream",  connected ? "A enviar": "Parado",    connected],
         ["Código",  streamId,  true],
       ].map(([label, val, ok]) => (
@@ -468,6 +600,7 @@ const VideoCapture = ({ standalone = false }) => {
 
               <video ref={videoRef} autoPlay playsInline muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
+              <canvas ref={detectCanvasRef} style={{ display: "none" }} />
 
               {/* Stream code badge (sempre visível quando ativo) */}
               {active && (
@@ -496,6 +629,15 @@ const VideoCapture = ({ standalone = false }) => {
                   }}>
                     <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--warning)" }} />
                     <span>{connected ? "A transmitir" : "A ligar..."}</span>
+                  </div>
+                  <div style={{
+                    background: "rgba(247,246,243,0.9)", backdropFilter: "blur(8px)",
+                    border: "1px solid var(--border)", borderRadius: "99px",
+                    padding: "4px 10px", fontFamily: "var(--font-mono)", fontSize: "11px",
+                    color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "5px",
+                  }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: detectReady ? "var(--success)" : "var(--warning)" }} />
+                    <span>{detectReady ? "Detecção ativa" : "Detecção inativa"}</span>
                   </div>
                 </div>
               )}

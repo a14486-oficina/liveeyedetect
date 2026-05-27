@@ -230,7 +230,12 @@ const Receiver = () => {
 
       pc.ondatachannel = (event) => {
         dataChannelRef.current = event.channel;
-        dataChannelRef.current.onopen = () => console.log("Data channel aberto");
+        dataChannelRef.current.onopen = () => {
+          console.log("Data channel aberto");
+          if (wsSignal?.readyState === WebSocket.OPEN) {
+            wsSignal.send(JSON.stringify({ type: "data_channel_ready", streamId: sid }));
+          }
+        };
       };
 
       const tryStartLoop = () => {
@@ -317,6 +322,12 @@ const Receiver = () => {
 
         if (alertaConfirmado) {
           setAlert(true);
+
+          if (navigator.vibrate) {
+            navigator.vibrate([200, 100, 200, 100, 200]);
+          }
+
+
           if (dataChannelRef.current?.readyState === "open") {
             const pessoas = dets
               .filter((det) => det.name)

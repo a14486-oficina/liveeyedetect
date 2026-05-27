@@ -90,6 +90,9 @@ const Receiver = () => {
         const room = registeredRoomRef.current;
         if (room) {
           ws.send(JSON.stringify({ type: "register", role: "receiver", streamId: room }));
+        } else {
+          // Pede a lista imediatamente ao ligar (sem esperar pelo primeiro intervalo de 3s)
+          ws.send(JSON.stringify({ type: "list" }));
         }
       };
 
@@ -158,9 +161,25 @@ const Receiver = () => {
     setMode(MODE_SELECT);
     setSelectedStream(null);
     streamIdRef.current = null;
+    registeredRoomRef.current = null;
     setConnected(false);
     setDetections([]);
     setAlert(false);
+
+    // Restaura o onmessage para voltar a receber a lista de streams
+    const ws = wsSignalRef.current;
+    if (ws) {
+      ws.onmessage = (message) => {
+        const data = JSON.parse(message.data);
+        if (data.type === "streams") {
+          setStreams(data.streams || []);
+        }
+      };
+      // Pede a lista imediatamente
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "list" }));
+      }
+    }
   }, []);
 
   // ── WebRTC + YOLO (só quando está em modo watching) ──
@@ -424,7 +443,7 @@ const Receiver = () => {
     return () => {
       active = false;
       clearTimeout(reconnectTimer);
-      videoRef.current.srcObject = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
       cleanup();
     };
   }, [mode]);
@@ -570,23 +589,24 @@ const Receiver = () => {
 
         {/* Video area */}
         <div className="receiver-video-area">
-          {/* Botão voltar */}
-          <button onClick={backToList} style={{
-            alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "6px",
-            background: "var(--bg-surface)", border: "1px solid var(--border)",
-            borderRadius: "7px", padding: "6px 12px", cursor: "pointer",
-            color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: "11px",
-            marginBottom: "4px",
-          }}>
-            ← Voltar
-          </button>
-
           <div className="receiver-video-box">
+
+            {/* Botão voltar — overlay dentro do vídeo */}
+            <button onClick={backToList} style={{
+              position: "absolute", top: "8px", left: "8px", zIndex: 26,
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: "7px", padding: "6px 12px", cursor: "pointer",
+              color: "#fff", fontFamily: "var(--font-mono)", fontSize: "11px",
+            }}>
+              ← Voltar
+            </button>
 
             {/* Stream badge */}
             {selectedStream && (
               <div style={{
-                position: "absolute", top: "8px", left: "8px", zIndex: 25,
+                position: "absolute", top: "8px", left: "90px", zIndex: 25,
                 background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
                 borderRadius: "6px", padding: "4px 8px",
               }}>

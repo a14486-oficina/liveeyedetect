@@ -159,7 +159,16 @@ const NavBtn = ({ item, active, onNavigate, counts }) => {
       textAlign: "left", fontFamily: "var(--font-sans)", fontSize: "13px",
       fontWeight: isActive ? 500 : 400,
     }}>
-      <span style={{ fontSize: "12px", width: "16px", textAlign: "center", opacity: 0.8 }}>{item.icon}</span>
+      <span style={{ fontSize: "12px", width: "16px", textAlign: "center", opacity: 0.8, position: "relative" }}>
+        {item.icon}
+        {item.id === "missing" && counts?.newDetections > 0 && (
+          <span style={{
+            position: "absolute", top: "-4px", right: "-6px",
+            width: "8px", height: "8px", borderRadius: "50%",
+            background: "#e74c3c", boxShadow: "0 0 6px rgba(231,76,60,0.6)",
+          }} />
+        )}
+      </span>
       <span style={{ flex: 1 }}>{item.label}</span>
       {counts?.[item.id] > 0 && (
         <span style={{

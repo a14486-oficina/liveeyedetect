@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 import { WS_PROTO, WS_HOST, API, getToken } from "../api.js";
+import { addDetection } from "../detectionStore.js";
 
 const MODE_SELECT = "select";
 const MODE_WATCHING = "watching";
@@ -8,12 +9,9 @@ const MODE_WATCHING = "watching";
 const Receiver = () => {
   const videoRef = useRef(null);
   const overlayRef = useRef(null);
-  const captureRef = useRef(null);
   const wsSignalRef = useRef(null);
-  const wsYoloRef = useRef(null);
   const pcRef = useRef(null);
   const dataChannelRef = useRef(null);
-  const isWaitingRef = useRef(false);
   const streamIdRef = useRef(null);
 
   const [mode, setMode] = useState(MODE_SELECT);
@@ -22,37 +20,9 @@ const Receiver = () => {
   const [status, setStatus] = useState("A aguardar ligação...");
   const [connected, setConnected] = useState(false);
   const [alert, setAlert] = useState(false);
+  // detections: lista de { id, name, hora, count } enviadas pelo emissor via data channel
   const [detections, setDetections] = useState([]);
-  const [fps, setFps] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
-  const fpsCountRef = useRef(0);
-  const personMapRef = useRef({});   // { [nome]: id }
-
-  // FPS counter
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFps(fpsCountRef.current);
-      fpsCountRef.current = 0;
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Carrega mapa nome→ID para registo automático de localizações
-  useEffect(() => {
-    const load = () => {
-      fetch(`${API}/pessoas_listar`)
-        .then((r) => r.json())
-        .then((data) => {
-          const map = {};
-          data.forEach((p) => { map[p.nome] = p.id; });
-          personMapRef.current = map;
-        })
-        .catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 30000);
-    return () => clearInterval(id);
-  }, []);
 
   // Alert flash
   useEffect(() => {
@@ -91,7 +61,6 @@ const Receiver = () => {
         if (room) {
           ws.send(JSON.stringify({ type: "register", role: "receiver", streamId: room }));
         } else {
-          // Pede a lista imediatamente ao ligar (sem esperar pelo primeiro intervalo de 3s)
           ws.send(JSON.stringify({ type: "list" }));
         }
       };
@@ -166,7 +135,6 @@ const Receiver = () => {
     setDetections([]);
     setAlert(false);
 
-    // Restaura o onmessage para voltar a receber a lista de streams
     const ws = wsSignalRef.current;
     if (ws) {
       ws.onmessage = (message) => {
@@ -175,35 +143,21 @@ const Receiver = () => {
           setStreams(data.streams || []);
         }
       };
-      // Pede a lista imediatamente
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "list" }));
       }
     }
   }, []);
 
-  // ── WebRTC + YOLO (só quando está em modo watching) ──
+  // ── WebRTC — só recebe vídeo e escuta o data channel do emissor ──
   useEffect(() => {
     if (mode !== MODE_WATCHING) return;
 
     let reconnectTimer = null;
     let reconnectAttempts = 0;
     let active = true;
-    let videoReady = false;
-    let yoloReady = false;
-    let resizeFn = null;
-    let currentStreamId = streamIdRef.current;
 
     const cleanup = () => {
-      if (resizeFn) window.removeEventListener("resize", resizeFn);
-      if (wsYoloRef.current) {
-        wsYoloRef.current.onopen = null;
-        wsYoloRef.current.onmessage = null;
-        wsYoloRef.current.onclose = null;
-        wsYoloRef.current.onerror = null;
-        wsYoloRef.current.close();
-        wsYoloRef.current = null;
-      }
       if (pcRef.current) {
         pcRef.current.onicecandidate = null;
         pcRef.current.ontrack = null;
@@ -213,7 +167,6 @@ const Receiver = () => {
         pcRef.current = null;
       }
       dataChannelRef.current = null;
-      isWaitingRef.current = false;
     };
 
     const scheduleReconnect = () => {
@@ -230,37 +183,60 @@ const Receiver = () => {
 
       const video = videoRef.current;
       const canvas = overlayRef.current;
-      const capture = captureRef.current;
-      if (!video || !canvas || !capture) return;
-      const ctx = canvas.getContext("2d");
-      const captureCtx = capture.getContext("2d");
+      if (!video || !canvas) return;
 
       const wsSignal = wsSignalRef.current;
       const sid = streamIdRef.current;
       if (!sid) return;
-
-      const wsYolo = new WebSocket(WS_PROTO + WS_HOST + "/ws", [getToken()]);
-      wsYoloRef.current = wsYolo;
 
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       pcRef.current = pc;
 
+      // Data channel: recebe alertas do emissor
       pc.ondatachannel = (event) => {
         dataChannelRef.current = event.channel;
         dataChannelRef.current.onopen = () => {
-          console.log("Data channel aberto");
+          console.log("[Receiver] Data channel aberto");
           if (wsSignal?.readyState === WebSocket.OPEN) {
             wsSignal.send(JSON.stringify({ type: "data_channel_ready", streamId: sid }));
           }
         };
-      };
+        dataChannelRef.current.onmessage = (e) => {
+          try {
+            const parsed = JSON.parse(e.data);
+            if (parsed.type === "detetado" && Array.isArray(parsed.pessoas)) {
+              setAlert(true);
+              if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
 
-      const tryStartLoop = () => {
-        if (videoReady && yoloReady) {
-          setTimeout(sendFrame, 200);
-        }
+              const agora = new Date();
+              const horaStr = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}:${String(agora.getSeconds()).padStart(2, "0")}`;
+
+              parsed.pessoas.forEach((p) => {
+                if (p.id != null) addDetection(p.id, p.name);
+              });
+
+              setDetections((prev) => {
+                const next = [...prev];
+                parsed.pessoas.forEach((p) => {
+                  const idx = next.findIndex((x) => x.id === p.id);
+                  if (idx >= 0) {
+                    next[idx] = { ...next[idx], count: next[idx].count + 1, hora: horaStr };
+                  } else {
+                    next.unshift({ id: p.id, name: p.name, hora: horaStr, count: 1 });
+                  }
+                });
+                return next;
+              });
+            }
+          } catch {}
+          // mensagem legada "DETETADO" (string)
+          if (e.data === "DETETADO") {
+            setAlert(true);
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+          }
+        };
       };
 
       pc.ontrack = (event) => {
@@ -269,8 +245,6 @@ const Receiver = () => {
           video.play();
           setConnected(true);
           setStatus("Vídeo recebido");
-          videoReady = true;
-          tryStartLoop();
         };
       };
 
@@ -286,24 +260,23 @@ const Receiver = () => {
         }
       };
 
-      // Usar o signal ws para mensagens da sala
       const onSignalMessage = (message) => {
         const data = JSON.parse(message.data);
         if (data.streamId !== sid) return;
         if (data.type === "offer") {
-          pc.setRemoteDescription(new RTCSessionDescription(data.offer)).then(() => {
-            return pc.createAnswer();
-          }).then((answer) => {
-            return pc.setLocalDescription(answer);
-          }).then(() => {
-            if (wsSignal?.readyState === WebSocket.OPEN) {
-              wsSignal.send(JSON.stringify({ type: "answer", streamId: sid, answer: pc.localDescription }));
-            }
-            setStatus("Ligação estabelecida");
-          }).catch((err) => {
-            console.error("Erro no handshake offer/answer:", err);
-            scheduleReconnect();
-          });
+          pc.setRemoteDescription(new RTCSessionDescription(data.offer))
+            .then(() => pc.createAnswer())
+            .then((answer) => pc.setLocalDescription(answer))
+            .then(() => {
+              if (wsSignal?.readyState === WebSocket.OPEN) {
+                wsSignal.send(JSON.stringify({ type: "answer", streamId: sid, answer: pc.localDescription }));
+              }
+              setStatus("Ligação estabelecida");
+            })
+            .catch((err) => {
+              console.error("Erro no handshake offer/answer:", err);
+              scheduleReconnect();
+            });
         } else if (data.type === "ice") {
           pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
         }
@@ -312,130 +285,6 @@ const Receiver = () => {
       if (wsSignal) {
         wsSignal.onmessage = onSignalMessage;
       }
-
-      const sendFrame = () => {
-        if (video.videoWidth === 0 || wsYolo.readyState !== WebSocket.OPEN || isWaitingRef.current) return;
-        isWaitingRef.current = true;
-        capture.width = video.videoWidth;
-        capture.height = video.videoHeight;
-        captureCtx.drawImage(video, 0, 0);
-        const dataURL = capture.toDataURL("image/jpeg", 0.5);
-        wsYolo.send(dataURL);
-      };
-
-      wsYolo.onopen = () => {
-        reconnectAttempts = 0;
-        yoloReady = true;
-        tryStartLoop();
-      };
-      wsYolo.onclose = () => scheduleReconnect();
-      wsYolo.onerror = () => {};
-
-      wsYolo.onmessage = (event) => {
-        isWaitingRef.current = false;
-        fpsCountRef.current += 1;
-
-        const resposta = JSON.parse(event.data);
-        const dets = resposta.detections || [];
-        const alertaConfirmado = resposta.dispararAlerta;
-
-        if (alertaConfirmado) {
-          setAlert(true);
-
-          if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200, 100, 200]);
-          }
-
-
-          if (dataChannelRef.current?.readyState === "open") {
-            const pessoas = dets
-              .filter((det) => det.name)
-              .map((det) => ({ id: personMapRef.current[det.name], name: det.name }))
-              .filter((p) => p.id != null);
-            dataChannelRef.current.send(JSON.stringify({ type: "detetado", pessoas }));
-          }
-        }
-
-        setDetections(dets);
-
-        const scaleX = canvas._scaleX ?? (canvas.width / (video.videoWidth || 1));
-        const scaleY = canvas._scaleY ?? (canvas.height / (video.videoHeight || 1));
-        const offX   = canvas._offsetX ?? 0;
-        const offY   = canvas._offsetY ?? 0;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        dets.forEach((det) => {
-          const x = det.x * scaleX + offX;
-          const y = det.y * scaleY + offY;
-          const w = det.w * scaleX;
-          const h = det.h * scaleY;
-          const isKnown = !!det.name;
-
-          ctx.strokeStyle = isKnown ? "#2d7a4f" : "#c0392b";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, w, h);
-
-          const cs = 12;
-          ctx.lineWidth = 3;
-          [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy], i) => {
-            ctx.beginPath();
-            ctx.moveTo(cx + (i % 2 === 0 ? cs : -cs), cy);
-            ctx.lineTo(cx, cy);
-            ctx.lineTo(cx, cy + (i < 2 ? cs : -cs));
-            ctx.stroke();
-          });
-
-          if (det.name) {
-            ctx.fillStyle = isKnown ? "rgba(45,122,79,0.9)" : "rgba(192,57,43,0.9)";
-            const label = det.name;
-            ctx.font = "500 12px 'DM Mono', monospace";
-            const tw = ctx.measureText(label).width;
-            ctx.fillRect(x, y - 22, tw + 12, 22);
-            ctx.fillStyle = "#fff";
-            ctx.fillText(label, x + 6, y - 6);
-          }
-        });
-
-        setTimeout(sendFrame, 50);
-      };
-
-      const resizeCanvas = () => {
-        const rect = video.getBoundingClientRect();
-        const containerW = rect.width;
-        const containerH = rect.height;
-        const videoW = video.videoWidth || 1;
-        const videoH = video.videoHeight || 1;
-        const videoAspect = videoW / videoH;
-        const containerAspect = containerW / containerH;
-
-        let renderW, renderH, offsetX, offsetY;
-        if (videoAspect < containerAspect) {
-          renderH = containerH;
-          renderW = containerH * videoAspect;
-          offsetX = (containerW - renderW) / 2;
-          offsetY = 0;
-        } else {
-          renderW = containerW;
-          renderH = containerW / videoAspect;
-          offsetX = 0;
-          offsetY = (containerH - renderH) / 2;
-        }
-
-        canvas.width = containerW;
-        canvas.height = containerH;
-        canvas.style.width = containerW + "px";
-        canvas.style.height = containerH + "px";
-        canvas._offsetX = offsetX;
-        canvas._offsetY = offsetY;
-        canvas._scaleX = renderW / videoW;
-        canvas._scaleY = renderH / videoH;
-      };
-
-      resizeFn = resizeCanvas;
-      video.addEventListener("loadeddata", resizeCanvas);
-      video.addEventListener("loadedmetadata", resizeCanvas);
-      window.addEventListener("resize", resizeCanvas);
     };
 
     setup();
@@ -467,12 +316,12 @@ const Receiver = () => {
     <InfoCard>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ textAlign: "center" }}>
-          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>FPS</span>
-          <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{fps}</span>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Detetadas</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)" }}>{detections.length}</span>
         </div>
         <div style={{ textAlign: "center" }}>
-          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Deteções</span>
-          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: detections.length > 0 ? "var(--accent)" : "var(--text-primary)" }}>{detections.length}</span>
+          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Alertas</span>
+          <span style={{ fontSize: "14px", fontWeight: 500, fontFamily: "var(--font-mono)", color: alert ? "var(--accent)" : "var(--text-muted)" }}>{alert ? "ATIVO" : "—"}</span>
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ position: "relative", width: "8px", height: "8px", margin: "0 auto 4px" }}>
@@ -486,25 +335,49 @@ const Receiver = () => {
   );
 
   const detectionsList = (
-    <InfoCard title="Deteções ativas">
+    <InfoCard title={`Pessoas detetadas${detections.length > 0 ? ` (${detections.length})` : ""}`}>
       {detections.length === 0 ? (
-        <p style={{ color: "var(--text-muted)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>Nenhuma deteção</p>
+        <div style={{ textAlign: "center", padding: "14px 0" }}>
+          <div style={{ fontSize: "20px", marginBottom: "6px", opacity: 0.4 }}>◎</div>
+          <p style={{ color: "var(--text-muted)", fontSize: "11px", fontFamily: "var(--font-mono)", margin: 0 }}>
+            Nenhuma pessoa detetada
+          </p>
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          {detections.map((det, i) => (
-            <div key={i} style={{
+        <div style={{ display: "flex", flexDirection: "column", gap: "5px", maxHeight: "300px", overflowY: "auto" }}>
+          {detections.map((det) => (
+            <div key={det.id} style={{
               display: "flex", alignItems: "center", gap: "8px",
-              borderRadius: "7px", padding: "7px 10px",
-              background: det.name ? "var(--success-light)" : "var(--accent-light)",
-              border: `1px solid ${det.name ? "var(--success-border)" : "var(--accent-border)"}`,
+              borderRadius: "7px", padding: "8px 10px",
+              background: "var(--success-light)",
+              border: "1px solid var(--success-border)",
+              animation: "fadeInRow 0.2s ease",
             }}>
-              <div style={{ width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0, background: det.name ? "var(--success)" : "var(--accent)" }} />
-              <span style={{ fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: det.name ? "var(--success)" : "var(--accent)", fontFamily: "var(--font-mono)" }}>
-                {det.name || `Pessoa #${i + 1}`}
-              </span>
-              <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                {Math.round(det.conf * 100)}%
-              </span>
+              <div style={{
+                width: "28px", height: "28px", borderRadius: "50%",
+                background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--accent)", fontFamily: "var(--font-sans)" }}>
+                  {det.name.slice(0, 2).toUpperCase()}
+                </span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: "12px", fontWeight: 500, color: "var(--success)", fontFamily: "var(--font-sans)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {det.name}
+                </p>
+                <p style={{ margin: 0, fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                  {det.hora}
+                </p>
+              </div>
+              {det.count > 1 && (
+                <span style={{
+                  fontSize: "10px", fontFamily: "var(--font-mono)",
+                  background: "var(--success-light)", color: "var(--success)",
+                  padding: "2px 7px", borderRadius: "99px", flexShrink: 0,
+                  border: "1px solid var(--success-border)",
+                }}>×{det.count}</span>
+              )}
             </div>
           ))}
         </div>
@@ -515,13 +388,13 @@ const Receiver = () => {
   const systemInfo = (
     <InfoCard title="Sistema">
       {[
-        ["WebRTC",  connected ? "Ligado" : "Desligado", connected],
-        ["YOLO",    fps > 0   ? "Ativo"  : "Inativo",  fps > 0],
-        ["Alertas", alert     ? "ATIVO"  : "Normal",   alert],
+        ["WebRTC",  connected ? "Ligado"  : "Desligado", connected],
+        ["Alertas", alert     ? "ATIVO"   : "Normal",    alert],
+        ["Stream",  selectedStream || "—", !!selectedStream],
       ].map(([label, val, ok]) => (
         <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{label}</span>
-          <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)", color: ok ? "var(--success)" : "var(--text-muted)" }}>{val}</span>
+          <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: "var(--font-mono)", color: ok ? "var(--success)" : "var(--text-muted)", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{val}</span>
         </div>
       ))}
     </InfoCard>
@@ -533,10 +406,9 @@ const Receiver = () => {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       flex: 1, padding: "40px 20px",
     }}>
-      
       <h2 style={{ fontSize: "18px", fontWeight: 500, color: "var(--text-primary)", marginBottom: "4px" }}>Transmissões Ativas</h2>
       <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: "24px" }}>
-        {streams.length === 0 ? "Nenhuma transmissão disponível" : `Seleciona uma transmissão para visualizar`}
+        {streams.length === 0 ? "Nenhuma transmissão disponível" : "Seleciona uma transmissão para visualizar"}
       </p>
 
       {streams.length === 0 ? (
@@ -591,7 +463,7 @@ const Receiver = () => {
         <div className="receiver-video-area">
           <div className="receiver-video-box">
 
-            {/* Botão voltar — overlay dentro do vídeo */}
+            {/* Botão voltar */}
             <button onClick={backToList} style={{
               position: "absolute", top: "8px", left: "8px", zIndex: 26,
               display: "flex", alignItems: "center", gap: "6px",
@@ -656,7 +528,7 @@ const Receiver = () => {
 
             <video ref={videoRef} autoPlay playsInline muted
               style={{ width: "100%", height: "100%", objectFit: "contain", display: connected ? "block" : "none" }} />
-            <canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} />
+            <canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", display: "none" }} />
 
             {/* Alert banner */}
             {alert && (
@@ -672,19 +544,58 @@ const Receiver = () => {
               </div>
             )}
 
-            {/* Mobile stats overlay */}
-            <div className="receiver-mobile-stats">
-              <div className="stat-pill">
-                <span>{fps} FPS</span>
+            {/* Mobile detections overlay */}
+            {detections.length > 0 && (
+              <div style={{
+                position: "absolute", top: "10px", right: "10px", zIndex: 20,
+                width: "160px", maxHeight: "200px",
+                background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)",
+                borderRadius: "10px", overflow: "hidden",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}>
+                <div style={{
+                  padding: "6px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}>
+                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#2d7a4f" }} />
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Detetadas ({detections.length})
+                  </span>
+                </div>
+                <div style={{ overflowY: "auto", maxHeight: "155px", padding: "4px 0" }}>
+                  {detections.map((p) => (
+                    <div key={p.id} style={{
+                      display: "flex", alignItems: "center", gap: "7px",
+                      padding: "5px 10px",
+                    }}>
+                      <div style={{
+                        width: "22px", height: "22px", borderRadius: "50%",
+                        background: "rgba(45,122,79,0.3)", border: "1px solid rgba(45,122,79,0.5)",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      }}>
+                        <span style={{ fontSize: "9px", fontWeight: 600, color: "#6fcf97", fontFamily: "var(--font-sans)" }}>
+                          {p.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: "11px", fontWeight: 500, color: "#fff", fontFamily: "var(--font-sans)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {p.name}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "9px", color: "rgba(255,255,255,0.45)", fontFamily: "var(--font-mono)" }}>
+                          {p.hora}
+                        </p>
+                      </div>
+                      {p.count > 1 && (
+                        <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "#6fcf97", background: "rgba(45,122,79,0.2)", padding: "1px 5px", borderRadius: "99px", flexShrink: 0 }}>
+                          ×{p.count}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="stat-pill" style={{ color: detections.length > 0 ? "var(--accent)" : undefined }}>
-                <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: connected ? "var(--success)" : "var(--accent)" }} />
-                <span>{detections.length} det.</span>
-              </div>
-            </div>
+            )}
           </div>
-
-          <canvas ref={captureRef} style={{ display: "none" }} />
         </div>
 
         {/* Desktop side panel */}
@@ -695,7 +606,7 @@ const Receiver = () => {
         </div>
       </main>
 
-      {/* Mobile FAB to toggle bottom sheet */}
+      {/* Mobile FAB */}
       <button
         className={`receiver-fab${detections.length > 0 ? " has-detections" : ""}`}
         onClick={() => setPanelOpen((o) => !o)}
@@ -738,6 +649,10 @@ const Receiver = () => {
           from { transform: translateY(100%); }
           to   { transform: translateY(0); }
         }
+        @keyframes fadeInRow {
+          from { opacity: 0; transform: translateX(6px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
         .scan-line   { animation: scan-line 3s linear infinite; }
         .alert-flash { animation: alert-flash 0.4s ease-in-out 3; }
 
@@ -754,11 +669,10 @@ const Receiver = () => {
           height: calc(100svh - 140px); width: auto;
         }
         .receiver-side-panel {
-          width: 240px; display: flex; flex-direction: column; gap: 0px; flex-shrink: 0;
+          width: 260px; display: flex; flex-direction: column; gap: 0px; flex-shrink: 0;
         }
         .receiver-fab { display: none; }
         .receiver-bottom-sheet { display: none; }
-        .receiver-mobile-stats { display: none; }
 
         @media (max-width: 768px) {
           .receiver-layout {
@@ -776,13 +690,10 @@ const Receiver = () => {
           .receiver-fab {
             display: flex; position: fixed; bottom: 80px; right: 16px;
             width: 52px; height: 52px; border-radius: 50%;
-            background: var(--accent); border: none;
+            border: none;
             box-shadow: 0 4px 16px rgba(192,57,43,0.35);
             align-items: center; justify-content: center;
-            font-size: 18px; color: #fff; cursor: pointer; z-index: 120;
-          }
-          .receiver-fab.has-detections {
-            animation: pulse-ring 1s ease-out infinite;
+            font-size: 18px; cursor: pointer; z-index: 120;
           }
           .receiver-bottom-sheet {
             display: block; position: fixed; bottom: 64px; left: 0; right: 0;
@@ -791,16 +702,6 @@ const Receiver = () => {
             z-index: 110; padding: 12px 16px 16px;
             animation: slideUp 0.25s cubic-bezier(0.2,0,0.2,1);
             box-shadow: 0 -4px 24px rgba(26,25,22,0.12);
-          }
-          .receiver-mobile-stats {
-            display: flex; position: absolute; bottom: 10px; left: 10px;
-            gap: 6px; z-index: 20;
-          }
-          .stat-pill {
-            background: rgba(247,246,243,0.9); backdrop-filter: blur(8px);
-            border: 1px solid var(--border); border-radius: 99px;
-            padding: 4px 10px; font-family: var(--font-mono); font-size: 11px;
-            color: var(--text-secondary); display: flex; align-items: center; gap: 5px;
           }
         }
       `}</style>

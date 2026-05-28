@@ -501,6 +501,7 @@ class RecuperarRedefinirBody(BaseModel):
  
 def _enviar_email_codigo(destino: str, codigo: str, nome: str):
     """Envia o email com o código de recuperação via Gmail SMTP."""
+
     gmail_user = os.getenv("GMAIL_USER")
     gmail_pass = os.getenv("GMAIL_APP_PASSWORD")
  
@@ -511,10 +512,6 @@ def _enviar_email_codigo(destino: str, codigo: str, nome: str):
  
     html = f"""
     <div style="font-family: 'DM Sans', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f7f6f3; border-radius: 12px;">
-      <div style="background: #c0392b; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-        <span style="color: #fff; font-size: 18px;">◎</span>
-      </div>
-      <h2 style="color: #1a1916; font-size: 20px; margin: 0 0 8px;">Recuperação de acesso</h2>
       <p style="color: #6b6760; font-size: 14px; margin: 0 0 24px;">Olá{f', {nome}' if nome else ''}! O teu código de recuperação é:</p>
       <div style="background: #fff; border: 1px solid #e2e0d8; border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 24px;">
         <span style="font-family: 'DM Mono', monospace; font-size: 36px; font-weight: 500; color: #c0392b; letter-spacing: 0.3em;">{codigo}</span>
@@ -939,6 +936,17 @@ def migrar_ids_legados():
 _signal_rooms: dict[str, dict] = {}
 # { stream_id: {"clients": {ws: role}, "created_at": timestamp} }
 
+_monitors: set[WebSocket] = set()
+
+async def _broadcast_detection(person_id: int, name: str):
+    dead = set()
+    for ws in _monitors:
+        try:
+            await ws.send_json({"type": "person_detected", "person_id": person_id, "name": name})
+        except Exception:
+            dead.add(ws)
+    _monitors -= dead
+
 @app.websocket("/ws-signal")
 async def ws_signal(ws: WebSocket):
     protocols = ws.headers.get("sec-websocket-protocol", "")
@@ -1013,6 +1021,28 @@ async def ws_signal(ws: WebSocket):
                 del _signal_rooms[my_room]
                 print(f"[ws-signal] Sala {my_room} eliminada (vazia)")
         print(f"[ws-signal] Salas ativas: {len(_signal_rooms)}")
+
+
+@app.websocket("/ws-monitor")
+async def ws_monitor(ws: WebSocket):
+    protocols = ws.headers.get("sec-websocket-protocol", "")
+    token = protocols.split(",")[0].strip() if protocols else ""
+    if not token or token not in _active_tokens:
+        await ws.close(code=4001)
+        return
+    await ws.accept(subprotocol=token)
+    _monitors.add(ws)
+    print(f"[ws-monitor] Cliente ligado (total: {len(_monitors)})")
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"[ws-monitor] Erro: {e}")
+    finally:
+        _monitors.discard(ws)
+        print(f"[ws-monitor] Cliente desligado (total: {len(_monitors)})")
 
 
 @app.websocket("/ws")

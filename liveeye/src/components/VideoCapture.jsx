@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 
 import { WS_PROTO, WS_HOST, API, getToken } from "../api.js";
 import { toast } from "../toast.js";
+import { addDetection } from "../detectionStore.js";
 
 // Detecta se está a ser usado standalone (Home.jsx) ou dentro do Dashboard
 const useIsMobile = () => {
@@ -53,6 +54,7 @@ const VideoCapture = ({ standalone = false }) => {
   const activeRef = useRef(false);
   const audioCtxRef = useRef(null);
   const isMobile = useIsMobile();
+  const [detectedList, setDetectedList] = useState([]); // { id, name, hora, count }
 
   const startCamera = async () => {
     try {
@@ -148,7 +150,33 @@ const VideoCapture = ({ standalone = false }) => {
         .filter((det) => det.name && det.person_id)
         .map((det) => ({ id: det.person_id, name: det.name }));
 
+      pessoas.forEach((p) => addDetection(p.id, p.name));
+
       if (pessoas.length === 0) return;
+
+      // Notificar o Receiver via data channel
+      try {
+        const ch = sendChannelRef.current;
+        if (ch && ch.readyState === "open") {
+          ch.send(JSON.stringify({ type: "detetado", pessoas }));
+        }
+      } catch {}
+
+      // Actualizar lista de deteções do emissor
+      const agora2 = new Date();
+      const horaStr = `${String(agora2.getHours()).padStart(2, "0")}:${String(agora2.getMinutes()).padStart(2, "0")}:${String(agora2.getSeconds()).padStart(2, "0")}`;
+      setDetectedList((prev) => {
+        const next = [...prev];
+        pessoas.forEach((p) => {
+          const idx = next.findIndex((x) => x.id === p.id);
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], count: next[idx].count + 1, hora: horaStr };
+          } else {
+            next.unshift({ id: p.id, name: p.name, hora: horaStr, count: 1 });
+          }
+        });
+        return next;
+      });
 
       const agora = new Date();
       const data = `${String(agora.getDate()).padStart(2, "0")}/${String(agora.getMonth() + 1).padStart(2, "0")}/${agora.getFullYear()}`;
@@ -396,6 +424,7 @@ const VideoCapture = ({ standalone = false }) => {
       }
       sendChannelRef.current = null;
       streamRef.current = null;
+      setDetectedList([]);
       if (wsDetectRef.current) {
         wsDetectRef.current.onopen = null;
         wsDetectRef.current.onmessage = null;
@@ -471,6 +500,58 @@ const VideoCapture = ({ standalone = false }) => {
     </InfoCard>
   );
 
+  const detectionListCard = (
+    <InfoCard title={`Deteções esta sessão${detectedList.length > 0 ? ` (${detectedList.length})` : ""}`}>
+      {detectedList.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "14px 0" }}>
+          <div style={{ fontSize: "20px", marginBottom: "6px", opacity: 0.4 }}>◎</div>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
+            Nenhuma pessoa detetada
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "5px", maxHeight: "260px", overflowY: "auto" }}>
+          {detectedList.map((p) => (
+            <div key={p.id} style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              background: "var(--bg-raised)", borderRadius: "7px",
+              padding: "8px 10px", border: "1px solid var(--border)",
+              animation: "fadeInRow 0.2s ease",
+            }}>
+              <div style={{
+                width: "28px", height: "28px", borderRadius: "50%",
+                background: "var(--accent-light)", border: "1px solid var(--accent-border)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--accent)", fontFamily: "var(--font-sans)" }}>
+                  {p.name.slice(0, 2).toUpperCase()}
+                </span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  margin: 0, fontSize: "12px", fontWeight: 500,
+                  color: "var(--text-primary)", fontFamily: "var(--font-sans)",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{p.name}</p>
+                <p style={{ margin: 0, fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                  {p.hora}
+                </p>
+              </div>
+              {p.count > 1 && (
+                <span style={{
+                  fontSize: "10px", fontFamily: "var(--font-mono)",
+                  background: "var(--accent-mid)", color: "var(--accent)",
+                  padding: "2px 7px", borderRadius: "99px", flexShrink: 0,
+                }}>×{p.count}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </InfoCard>
+  );
+
   const actionCard = (
     <InfoCard title="Controlo">
       {!active ? (
@@ -513,6 +594,10 @@ const VideoCapture = ({ standalone = false }) => {
           100% { top: 100%; }
         }
         .scan-line { animation: scan-line 3s linear infinite; }
+        @keyframes fadeInRow {
+          from { opacity: 0; transform: translateX(6px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
 
         /* Desktop layout */
         .vc-layout {
@@ -528,7 +613,7 @@ const VideoCapture = ({ standalone = false }) => {
           height: calc(100svh - 140px); width: auto;
         }
         .vc-side-panel {
-          width: 240px; display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
+          width: 260px; display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
         }
 
         /* Mobile layout */
@@ -602,6 +687,58 @@ const VideoCapture = ({ standalone = false }) => {
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
               <canvas ref={detectCanvasRef} style={{ display: "none" }} />
 
+              {/* Mobile detection list overlay */}
+              {isMobile && active && detectedList.length > 0 && (
+                <div style={{
+                  position: "absolute", top: "10px", right: "10px", zIndex: 20,
+                  width: "170px", maxHeight: "220px",
+                  background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)",
+                  borderRadius: "10px", overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}>
+                  <div style={{
+                    padding: "6px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    display: "flex", alignItems: "center", gap: "6px",
+                  }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#e74c3c", boxShadow: "0 0 6px rgba(231,76,60,0.7)" }} />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Detetadas ({detectedList.length})
+                    </span>
+                  </div>
+                  <div style={{ overflowY: "auto", maxHeight: "170px", padding: "4px 0" }}>
+                    {detectedList.map((p) => (
+                      <div key={p.id} style={{
+                        display: "flex", alignItems: "center", gap: "7px",
+                        padding: "5px 10px",
+                      }}>
+                        <div style={{
+                          width: "22px", height: "22px", borderRadius: "50%",
+                          background: "rgba(79,110,247,0.3)", border: "1px solid rgba(79,110,247,0.5)",
+                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        }}>
+                          <span style={{ fontSize: "9px", fontWeight: 600, color: "#7fa8ff", fontFamily: "var(--font-sans)" }}>
+                            {p.name.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: "11px", fontWeight: 500, color: "#fff", fontFamily: "var(--font-sans)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {p.name}
+                          </p>
+                          <p style={{ margin: 0, fontSize: "9px", color: "rgba(255,255,255,0.45)", fontFamily: "var(--font-mono)" }}>
+                            {p.hora}
+                          </p>
+                        </div>
+                        {p.count > 1 && (
+                          <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(79,110,247,0.9)", background: "rgba(79,110,247,0.15)", padding: "1px 5px", borderRadius: "99px", flexShrink: 0 }}>
+                            ×{p.count}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Stream code badge (sempre visível quando ativo) */}
               {active && (
                 <div style={{
@@ -648,6 +785,7 @@ const VideoCapture = ({ standalone = false }) => {
           <div className="vc-side-panel">
             {statusCard}
             {actionCard}
+            {detectionListCard}
             {systemInfo}
           </div>
 

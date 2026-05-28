@@ -7,16 +7,23 @@ import VideoCapture from "../components/VideoCapture";
 import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
 import AdminConvites from "../components/Adminconvites.jsx";
+import { getCount } from "../detectionStore.js";
 
 const Dashboard = () => {
   const [panel, setPanel] = useState(() => {
     return sessionStorage.getItem("liveeye_panel") || "add";
   });
-  const [counts, setCounts] = useState({ missing: 0, found: 0 });
+  const [counts, setCounts] = useState({ missing: 0, found: 0, newDetections: 0 });
   const desaparecedasRef = useRef(null);
   const encontradasRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setCounts((c) => ({ ...c, newDetections: getCount() }));
+    window.addEventListener("detection-update", handler);
+    return () => window.removeEventListener("detection-update", handler);
+  }, []);
 
   useEffect(() => {
     try {
@@ -212,11 +219,19 @@ const Dashboard = () => {
               key={item.id}
               className={`mobile-nav-btn${panel === item.id ? " active" : ""}`}
               onClick={() => handleNavigate(item.id)}
+              style={{ position: "relative" }}
             >
               <span className="mobile-nav-icon" style={{
                 color: panel === item.id ? "var(--accent)" : "var(--text-muted)",
               }}>{item.icon}</span>
               <span className="mobile-nav-label">{item.label}</span>
+              {item.id === "missing" && counts.newDetections > 0 && (
+                <span style={{
+                  position: "absolute", top: "2px", right: "10px",
+                  width: "8px", height: "8px", borderRadius: "50%",
+                  background: "#e74c3c", boxShadow: "0 0 6px rgba(231,76,60,0.6)",
+                }} />
+              )}
             </button>
           ))}
         </nav>

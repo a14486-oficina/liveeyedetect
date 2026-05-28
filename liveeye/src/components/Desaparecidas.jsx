@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "re
 
 import { API } from "../api.js";
 import PersonMap from "./PersonMap.jsx";
+import { getUnacknowledged, acknowledge } from "../detectionStore.js";
 
 const s = {
   label: {
@@ -271,12 +272,13 @@ const PhotoGallery = ({ imagens }) => {
 };
 
 // ─── Linha de pessoa ──────────────────────────────────────────────────────────
-const PersonRow = ({ pessoa, onFoundSuccess }) => {
+const PersonRow = ({ pessoa, onFoundSuccess, unacknowledged }) => {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
   const [newLoc, setNewLoc] = useState({ lat: "", lon: "", data: "", hora: "" });
+  const isNew = unacknowledged?.has(pessoa.id);
 
   const toggleOpen = async () => {
     if (!open && !details) {
@@ -286,6 +288,9 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
         setDetails(await res.json());
       } catch { /* silent */ }
       setLoadingDetails(false);
+    }
+    if (!open && isNew) {
+      acknowledge(pessoa.id);
     }
     setOpen((o) => !o);
   };
@@ -316,9 +321,10 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
 
   return (
     <div style={{
-      background: "var(--bg-surface)", border: "1px solid var(--border)",
+      background: "var(--bg-surface)",
+      border: isNew ? "1.5px solid #e74c3c" : "1px solid var(--border)",
       borderRadius: "10px", marginBottom: "6px", overflow: "hidden",
-      boxShadow: "var(--shadow-sm)",
+      boxShadow: isNew ? "0 0 8px rgba(231,76,60,0.25)" : "var(--shadow-sm)",
     }}>
       {/* Cabeçalho da linha */}
       <div style={{ padding: "13px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -330,7 +336,14 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
             fontSize: "8px", color: "var(--text-muted)", transition: "transform 0.18s",
             transform: open ? "rotate(90deg)" : "rotate(0deg)", display: "inline-block",
           }}>▶</span>
-          <span style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>
+          <span style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
+            {isNew && (
+              <span style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: "#e74c3c", flexShrink: 0,
+                boxShadow: "0 0 6px rgba(231,76,60,0.6)",
+              }} />
+            )}
             {pessoa.nome}
           </span>
           <span style={{
@@ -463,6 +476,13 @@ const PersonRow = ({ pessoa, onFoundSuccess }) => {
 const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unacknowledged, setUnacknowledged] = useState(() => getUnacknowledged());
+
+  useEffect(() => {
+    const handler = () => setUnacknowledged(getUnacknowledged());
+    window.addEventListener("detection-update", handler);
+    return () => window.removeEventListener("detection-update", handler);
+  }, []);
 
   const carregar = async () => {
     setLoading(true);
@@ -519,7 +539,7 @@ const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
           </p>
         </div>
       ) : (
-        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} />)
+        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} unacknowledged={unacknowledged} />)
       )}
 
       <style>{`

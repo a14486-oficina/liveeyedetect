@@ -261,7 +261,7 @@ const PainelRecuperacao = ({ onBack }) => {
     if (!email.trim() || !emailRegex.test(email.trim())) { setError("Introduz um email válido."); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API}/recuperar_password`, {
+      const res = await fetch(`${API}/recuperar/pedir`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
@@ -278,7 +278,7 @@ const PainelRecuperacao = ({ onBack }) => {
     if (codigo.length !== 6) { setError("O código deve ter 6 dígitos."); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API}/verificar_codigo`, {
+      const res = await fetch(`${API}/recuperar/verificar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), codigo }),
       });
@@ -295,7 +295,7 @@ const PainelRecuperacao = ({ onBack }) => {
     if (novaPass !== novaPass2) { setError("As palavras-passe não coincidem."); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API}/definir_nova_password`, {
+      const res = await fetch(`${API}/recuperar/redefinir`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), codigo, nova_password: novaPass }),
       });

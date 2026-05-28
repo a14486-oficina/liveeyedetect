@@ -11,9 +11,9 @@ export default defineConfig({
       // REST — todos os endpoints do backend
       '/login':                      { target: 'http://localhost:8000', changeOrigin: true },
       '/registar':                   { target: 'http://localhost:8000', changeOrigin: true },
-      '/recuperar/pedir':      { target: 'http://localhost:8000', changeOrigin: true },
-      '/recuperar/verificar':  { target: 'http://localhost:8000', changeOrigin: true },
-      '/recuperar/redefinir':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/recuperar/pedir':            { target: 'http://localhost:8000', changeOrigin: true },
+      '/recuperar/verificar':        { target: 'http://localhost:8000', changeOrigin: true },
+      '/recuperar/redefinir':        { target: 'http://localhost:8000', changeOrigin: true },
       '/pessoas_criar':              { target: 'http://localhost:8000', changeOrigin: true },
       '/pessoas_listar':             { target: 'http://localhost:8000', changeOrigin: true },
       '/pessoas_listar_encontradas': { target: 'http://localhost:8000', changeOrigin: true },

@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
 import { API } from "../api.js";
 import PersonMap from "./PersonMap.jsx";
-import { getUnacknowledged, acknowledge } from "../detectionStore.js";
 
 const s = {
   label: {
@@ -272,13 +271,13 @@ const PhotoGallery = ({ imagens }) => {
 };
 
 // ─── Linha de pessoa ──────────────────────────────────────────────────────────
-const PersonRow = ({ pessoa, onFoundSuccess, unacknowledged }) => {
+const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
   const [newLoc, setNewLoc] = useState({ lat: "", lon: "", data: "", hora: "" });
-  const isNew = unacknowledged?.has(pessoa.id);
+  const isNew = detectedIds?.has(pessoa.id);
 
   const toggleOpen = async () => {
     if (!open && !details) {
@@ -290,7 +289,8 @@ const PersonRow = ({ pessoa, onFoundSuccess, unacknowledged }) => {
       setLoadingDetails(false);
     }
     if (!open && isNew) {
-      acknowledge(pessoa.id);
+      // Marcar esta pessoa como vista no servidor
+      onAcknowledge(pessoa.id);
     }
     setOpen((o) => !o);
   };
@@ -476,12 +476,34 @@ const PersonRow = ({ pessoa, onFoundSuccess, unacknowledged }) => {
 const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [unacknowledged, setUnacknowledged] = useState(() => getUnacknowledged());
+  const [detectedIds, setDetectedIds] = useState(new Set()); // person_ids com deteções não vistas
+
+  // Polling ao servidor a cada 5s para saber quais pessoas têm deteções novas
+  const fetchDetected = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/detecoes/nao_vistas`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setDetectedIds(new Set(data.person_ids ?? []));
+    } catch { /* silent */ }
+  }, []);
 
   useEffect(() => {
-    const handler = () => setUnacknowledged(getUnacknowledged());
-    window.addEventListener("detection-update", handler);
-    return () => window.removeEventListener("detection-update", handler);
+    fetchDetected();
+    const interval = setInterval(fetchDetected, 5000);
+    return () => clearInterval(interval);
+  }, [fetchDetected]);
+
+  // Ao clicar numa pessoa: marcar só essa pessoa como vista no servidor
+  const handleAcknowledge = useCallback(async (personId) => {
+    try {
+      await fetch(`${API}/detecoes/marcar_vistas/${personId}`, { method: "POST" });
+      setDetectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(personId);
+        return next;
+      });
+    } catch { /* silent */ }
   }, []);
 
   const carregar = async () => {
@@ -539,7 +561,7 @@ const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
           </p>
         </div>
       ) : (
-        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} unacknowledged={unacknowledged} />)
+        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} detectedIds={detectedIds} onAcknowledge={handleAcknowledge} />)
       )}
 
       <style>{`

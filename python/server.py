@@ -14,6 +14,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 import cv2
 import base64
 import numpy as np
@@ -212,7 +213,64 @@ class AlterarPasswordBody(BaseModel):
     id_utilizador: int
     password_atual: str
     nova_password: str
- 
+
+# ── GET /detecoes/nao_vistas ──────────────────────────────────────────────────
+@app.get("/detecoes/nao_vistas")
+def detecoes_nao_vistas():
+    """Retorna contagem total e lista de person_ids com deteções não vistas."""
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT DISTINCT person_id FROM detecoes WHERE visto = 0"
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        db.close()
+        ids = [r["person_id"] for r in rows]
+        return {"count": len(ids), "person_ids": ids}
+    except Exception as e:
+        print(f"Erro detecoes_nao_vistas: {e}")
+        return {"count": 0, "person_ids": []}
+
+
+# ── POST /detecoes/marcar_vistas ──────────────────────────────────────────────
+@app.post("/detecoes/marcar_vistas")
+def marcar_vistas():
+    """Marca TODAS as deteções não vistas como vistas."""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("UPDATE detecoes SET visto = 1 WHERE visto = 0")
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"ok": True}
+    except Exception as e:
+        print(f"Erro marcar_vistas: {e}")
+        return {"ok": False}
+
+
+# ── POST /detecoes/marcar_vistas/{person_id} ──────────────────────────────────
+@app.post("/detecoes/marcar_vistas/{person_id}")
+def marcar_vistas_pessoa(person_id: int):
+    """Marca como vistas apenas as deteções de uma pessoa específica."""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE detecoes SET visto = 1 WHERE person_id = %s AND visto = 0",
+            (person_id,)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+        return {"ok": True}
+    except Exception as e:
+        print(f"Erro marcar_vistas_pessoa: {e}")
+        return {"ok": False}
+
+
 # ── POST /alterar_password ────────────────────────────────────────────────────
 @app.post("/alterar_password")
 def alterar_password(body: AlterarPasswordBody):
@@ -1095,6 +1153,7 @@ async def websocket_endpoint(ws: WebSocket):
                             forced_loc = (0, w, h, 0)
                             encodings = face_recognition.face_encodings(rgb_head, [forced_loc])
 
+                    matched = None
                     for encoding in encodings:
                         search_result = qdrant.query_points(
                             collection_name="pessoas",
@@ -1107,13 +1166,29 @@ async def websocket_endpoint(ws: WebSocket):
                         if search_result.points and search_result.points[0].score > 0.92:
                             matched = search_result.points[0]
                             name = matched.payload.get("nome")
+                            matched_person_id = matched.payload.get("person_id")
                             alerta_confirmado = True
+
+                            # ── Gravar deteção na tabela MySQL ────────────────
+                            try:
+                                db_det = get_db()
+                                cur_det = db_det.cursor()
+                                cur_det.execute(
+                                    "INSERT INTO detecoes (person_id, nome, visto) VALUES (%s, %s, 0)",
+                                    (matched_person_id, name),
+                                )
+                                db_det.commit()
+                                cur_det.close()
+                                db_det.close()
+                            except Exception as db_err:
+                                print(f"[ws] Erro ao gravar deteção na BD: {db_err}")
+                            # ─────────────────────────────────────────────────
                             break
 
                 detections.append({
                     "x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1,
                     "conf": conf, "cls": cls, "name": name,
-                    "person_id": matched.payload.get("person_id") if name else None,
+                    "person_id": matched.payload.get("person_id") if matched else None,
                 })
 
             await ws.send_json({

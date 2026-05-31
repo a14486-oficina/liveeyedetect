@@ -30,6 +30,7 @@ export default defineConfig({
       '/atualizar_perfil':           { target: 'http://localhost:8000', changeOrigin: true },
       '/alterar_password':           { target: 'http://localhost:8000', changeOrigin: true },
       '/eliminar_conta':             { target: 'http://localhost:8000', changeOrigin: true },
+      '/detecoes':                   { target: 'http://localhost:8000', changeOrigin: true }, // ← NOVO
 
       // WebSockets
       '/ws-signal': { target: 'ws://localhost:8000', ws: true, rewriteWsOrigin: true },

@@ -7,23 +7,21 @@ import VideoCapture from "../components/VideoCapture";
 import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
 import AdminConvites from "../components/Adminconvites.jsx";
-import { getCount } from "../detectionStore.js";
+import { useDetectionCount } from "../useDetectionCount.js"; // ← NOVO
 
 const Dashboard = () => {
   const [panel, setPanel] = useState(() => {
     return sessionStorage.getItem("liveeye_panel") || "add";
   });
-  const [counts, setCounts] = useState({ missing: 0, found: 0, newDetections: 0 });
+  const [counts, setCounts] = useState({ missing: 0, found: 0 });
   const desaparecedasRef = useRef(null);
   const encontradasRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    const handler = () => setCounts((c) => ({ ...c, newDetections: getCount() }));
-    window.addEventListener("detection-update", handler);
-    return () => window.removeEventListener("detection-update", handler);
-  }, []);
+  // ── NOVO: polling ao servidor para deteções não vistas ──────────────────
+  const { count: newDetections, marcarVistas } = useDetectionCount();
+  // ────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     try {
@@ -48,6 +46,8 @@ const Dashboard = () => {
     setPanel(p);
     sessionStorage.setItem("liveeye_panel", p);
     setSidebarOpen(false);
+    // Quando abre "Desaparecidas", marca as deteções como vistas
+    if (p === "missing") marcarVistas(); // ← NOVO
   };
 
   const handleLogout = () => {
@@ -145,7 +145,11 @@ const Dashboard = () => {
 
         {/* Desktop sidebar */}
         <div className="dash-sidebar">
-          <Sidebar active={panel} onNavigate={handleNavigate} counts={counts} />
+          <Sidebar
+            active={panel}
+            onNavigate={handleNavigate}
+            counts={{ ...counts, newDetections }} // ← usa o valor do polling
+          />
         </div>
 
         {/* Mobile top header */}
@@ -183,7 +187,11 @@ const Dashboard = () => {
         {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
         <div className={`drawer ${sidebarOpen ? "open" : ""}`}>
-          <Sidebar active={panel} onNavigate={handleNavigate} counts={counts} />
+          <Sidebar
+            active={panel}
+            onNavigate={handleNavigate}
+            counts={{ ...counts, newDetections }} // ← usa o valor do polling
+          />
         </div>
 
         {/* Main content */}
@@ -225,7 +233,7 @@ const Dashboard = () => {
                 color: panel === item.id ? "var(--accent)" : "var(--text-muted)",
               }}>{item.icon}</span>
               <span className="mobile-nav-label">{item.label}</span>
-              {item.id === "missing" && counts.newDetections > 0 && (
+              {item.id === "missing" && newDetections > 0 && ( // ← usa newDetections do polling
                 <span style={{
                   position: "absolute", top: "2px", right: "10px",
                   width: "8px", height: "8px", borderRadius: "50%",

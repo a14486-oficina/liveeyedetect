@@ -49,6 +49,7 @@ const VideoCapture = ({ standalone = false }) => {
   const ultimasLocaisRef = useRef({}); // { [personId]: { lat, lon } }
   const wsDetectRef = useRef(null);
   const detectCanvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const activeRef = useRef(false);
@@ -121,6 +122,55 @@ const VideoCapture = ({ standalone = false }) => {
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0);
     ws.send(canvas.toDataURL("image/jpeg", 0.5));
+  };
+
+  const drawDetections = (detections) => {
+    const video = videoRef.current;
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || !video || video.videoWidth === 0) return;
+
+    // O canvas sobrepõe o vídeo — tem de ter as mesmas dimensões lógicas
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    detections.forEach(({ x, y, w, h, name, conf }) => {
+      const isMatch = !!name;
+      const color = isMatch ? "#e74c3c" : "rgba(255,255,255,0.45)";
+
+      // Bounding box
+      ctx.strokeStyle = color;
+      ctx.lineWidth = isMatch ? 2.5 : 1.5;
+      ctx.strokeRect(x, y, w, h);
+
+      // Fill subtil
+      ctx.fillStyle = isMatch ? "rgba(231,76,60,0.10)" : "rgba(255,255,255,0.03)";
+      ctx.fillRect(x, y, w, h);
+
+      if (isMatch) {
+        // Label com nome + confiança
+        const label = `${name}  ${Math.round((conf ?? 0) * 100)}%`;
+        ctx.font = "bold 13px monospace";
+        const textW = ctx.measureText(label).width;
+        const labelH = 22;
+        const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
+
+        ctx.fillStyle = "#e74c3c";
+        ctx.fillRect(x, labelY, textW + 12, labelH);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, x + 6, labelY + 15);
+
+        // Ponto de alerta no centro da bounding box
+        ctx.beginPath();
+        ctx.arc(x + w / 2, y + h / 2, 6, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(231,76,60,0.75)";
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    });
   };
 
   const handleDetectAlert = (detections) => {
@@ -222,6 +272,8 @@ const VideoCapture = ({ standalone = false }) => {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      // Desenhar bounding boxes sempre — alerta ou não
+      drawDetections(data.detections || []);
       if (data.dispararAlerta) {
         handleDetectAlert(data.detections || []);
       }
@@ -685,7 +737,20 @@ const VideoCapture = ({ standalone = false }) => {
 
               <video ref={videoRef} autoPlay playsInline muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: active ? "block" : "none" }} />
+
+              {/* Canvas invisível para captura de frames */}
               <canvas ref={detectCanvasRef} style={{ display: "none" }} />
+
+              {/* Canvas visível para bounding boxes — sobrepõe o vídeo */}
+              <canvas
+                ref={overlayCanvasRef}
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%",
+                  pointerEvents: "none", zIndex: 5,
+                  display: active ? "block" : "none",
+                }}
+              />
 
               {/* Mobile detection list overlay */}
               {isMobile && active && detectedList.length > 0 && (

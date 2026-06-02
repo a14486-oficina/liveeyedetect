@@ -20,7 +20,7 @@ const Dashboard = () => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // ── NOVO: polling ao servidor para deteções não vistas ──────────────────
-  const { count: newDetections, marcarVistas } = useDetectionCount();
+  const { count: newDetections } = useDetectionCount();
   // ────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -46,10 +46,7 @@ const Dashboard = () => {
     setPanel(p);
     sessionStorage.setItem("liveeye_panel", p);
     setSidebarOpen(false);
-    // Quando abre "Desaparecidas", marca as deteções como vistas
-    if (p === "missing") marcarVistas(); // ← NOVO
   };
-
   const handleLogout = () => {
     sessionStorage.removeItem("liveeye_user");
     sessionStorage.removeItem("liveeye_panel");

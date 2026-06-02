@@ -4,15 +4,9 @@ import { API } from "./api.js";
 /**
  * useDetectionCount
  * -----------------
- * Faz polling ao servidor a cada 5 segundos para contar deteções não vistas
- * (visto = 0 na tabela `detecoes`).
- *
- * Funciona em qualquer dispositivo — não depende do emissor estar ativo
- * no mesmo browser.
- *
- * Retorna:
- *   count        — número de deteções não vistas
- *   marcarVistas — função que marca todas como vistas e reseta o contador
+ * Faz polling ao servidor a cada 5 segundos.
+ * Retorna o número de pessoas DISTINTAS com deteções não vistas.
+ * O badge da sidebar reflete pessoas, não rows individuais.
  */
 export function useDetectionCount() {
   const [count, setCount] = useState(0);
@@ -22,26 +16,18 @@ export function useDetectionCount() {
       const res = await fetch(`${API}/detecoes/nao_vistas`);
       if (!res.ok) return;
       const data = await res.json();
-      setCount(data.count ?? 0);
+      // person_ids é array de IDs únicos — o count é o número de pessoas distintas
+      setCount((data.person_ids ?? []).length);
     } catch {
-      /* silent — sem conexão ou servidor offline */
+      /* silent — servidor offline */
     }
   }, []);
 
   useEffect(() => {
-    fetchCount(); // chamada imediata ao montar
-    const interval = setInterval(fetchCount, 5000); // a cada 5 s
+    fetchCount();
+    const interval = setInterval(fetchCount, 5000);
     return () => clearInterval(interval);
   }, [fetchCount]);
 
-  const marcarVistas = useCallback(async () => {
-    try {
-      await fetch(`${API}/detecoes/marcar_vistas`, { method: "POST" });
-      setCount(0);
-    } catch {
-      /* silent */
-    }
-  }, []);
-
-  return { count, marcarVistas };
+  return { count };
 }

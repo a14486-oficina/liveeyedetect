@@ -277,7 +277,7 @@ const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
   const [newLoc, setNewLoc] = useState({ lat: "", lon: "", data: "", hora: "" });
-  const isNew = detectedIds?.has(pessoa.id);
+  const isNew = detectedIds?.has(Number(pessoa.id));
 
   const toggleOpen = async () => {
     if (!open && !details) {
@@ -484,7 +484,7 @@ const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
       const res = await fetch(`${API}/detecoes/nao_vistas`);
       if (!res.ok) return;
       const data = await res.json();
-      setDetectedIds(new Set(data.person_ids ?? []));
+      setDetectedIds(new Set((data.person_ids ?? []).map(Number)));
     } catch { /* silent */ }
   }, []);
 
@@ -500,7 +500,7 @@ const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
       await fetch(`${API}/detecoes/marcar_vistas/${personId}`, { method: "POST" });
       setDetectedIds((prev) => {
         const next = new Set(prev);
-        next.delete(personId);
+        next.delete(Number(personId));
         return next;
       });
     } catch { /* silent */ }

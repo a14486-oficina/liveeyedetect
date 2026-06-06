@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y \
     libswscale-dev \
     cmake \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/lib/x86_64-linux-gnu/libwebp.so.7 /usr/lib/x86_64-linux-gnu/libwebp.so.6
 
 WORKDIR /app
 

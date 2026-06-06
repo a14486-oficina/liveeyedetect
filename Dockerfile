@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y \
+    libwebp7 \
     libwebp-dev \
     libopenblas-dev \
     libglib2.0-0 \
@@ -11,7 +12,6 @@ RUN apt-get update && apt-get install -y \
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
-    libx264-dev \
     cmake \
     build-essential \
     && rm -rf /var/lib/apt/lists/*

@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     libglib2.0-0 \
     libgl1 \
+    libpng-dev \
     cmake \
     build-essential \
     && rm -rf /var/lib/apt/lists/*

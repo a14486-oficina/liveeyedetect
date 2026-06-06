@@ -94,11 +94,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ── Ligação ao MySQL ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        port=3306,
+        host=os.getenv("MySQL_HOST"),
+        port=int(os.getenv("MySQL_PORT", 3306)),
         user=os.getenv("MySQL_USER"),
-        password=os.getenv("MySQL_PASSWORD"),           
-        database="liveeyedetect"
+        password=os.getenv("MySQL_PASSWORD"),
+        database=os.getenv("MySQL_DATABASE", "liveeyedetect")
     )
 
 # ── Schema para atualizar perfil ─────────────────────────────────────────────

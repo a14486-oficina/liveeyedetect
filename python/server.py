@@ -678,11 +678,13 @@ def recuperar_redefinir(body: RecuperarRedefinirBody):
 def get_next_person_id() -> int:
     result = qdrant.scroll(collection_name="pessoas", limit=1000)[0]
     if not result:
-        return 10
-    ids = [int(p.id) for p in result if str(p.id).isdigit()]
-    max_id = max(ids) if ids else 0
-    base = (max_id // 10) * 10
-    return base + 10
+        return 1
+    # Só considera IDs que seguem o esquema person_id * 10 (múltiplos de 10)
+    ids = [int(p.id) for p in result if int(p.id) % 10 == 0]
+    if not ids:
+        return 1
+    max_person_id = max(ids) // 10
+    return max_person_id + 1
 
 
 def _encode_image(img_bgr) -> str:
@@ -1136,7 +1138,7 @@ async def websocket_endpoint(ws: WebSocket):
 
                 # Crop só da cabeça (35% superior da bounding box da pessoa)
                 person_h = y2 - y1
-                head_y2 = y1 + int(person_h * 0.35)
+                head_y2 = y1 + int(person_h * 0.50)
                 head_crop = frame[y1:head_y2, x1:x2]
 
                 if head_crop.size > 0:

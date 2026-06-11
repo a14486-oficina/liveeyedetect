@@ -1136,7 +1136,7 @@ async def websocket_endpoint(ws: WebSocket):
                 cls = int(box.cls[0])
                 name = None
 
-                # Crop só da cabeça (35% superior da bounding box da pessoa)
+                # Crop da cabeca
                 person_h = y2 - y1
                 head_y2 = y1 + int(person_h * 0.50)
                 head_crop = frame[y1:head_y2, x1:x2]
@@ -1171,7 +1171,7 @@ async def websocket_endpoint(ws: WebSocket):
                             matched_person_id = matched.payload.get("person_id")
                             alerta_confirmado = True
 
-                            # ── Gravar deteção na tabela MySQL ────────────────
+                            # ── guaradr deteção na tabela MySQL 
                             try:
                                 db_det = get_db()
                                 cur_det = db_det.cursor()
@@ -1184,7 +1184,7 @@ async def websocket_endpoint(ws: WebSocket):
                                 db_det.close()
                             except Exception as db_err:
                                 print(f"[ws] Erro ao gravar deteção na BD: {db_err}")
-                            # ─────────────────────────────────────────────────
+
                             break
 
                 detections.append({

@@ -1,135 +1,141 @@
-192.168.1.130
-10.170.130.134
+# LiveEye
 
-# React + Vite
+Sistema de deteção de pessoas desaparecidas que usa YOLO + reconhecimento facial.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Arquitetura
 
-Currently, two official plugins are available:
+```
+PAP/
+├── python/server.py          # Backend FastAPI (YOLO + face_recognition)
+├── python/yolo26n.pt         # Modelo YOLO treinado
+├── liveeye/                  # Frontend React (Vite)
+├── BD/schema_liveeyedetect.sql  # Schema MySQL
+├── Dockerfile                # Container para o backend Python
+├── requirements.txt          # Dependências Python
+└── .env                      # Configuração (credenciais)
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Pré-requisitos
 
-## React Compiler
+- **Python** 3.12 (ver `.python-version`)
+- **Node.js** 18+
+- **MySQL** 8+ (ou MariaDB 10.4+)
+- **Conta Qdrant Cloud** (gratuita em https://cloud.qdrant.io)
+- **Git**
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Setup rápido (Windows)
 
-## Expanding the ESLint configuration
+### 🪄 Método automático (recomendado)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```batch
+install.bat        - faz tudo (venv, pip, npm, .env)
+start.bat          - inicia backend + frontend
+```
 
+Passo a passo:
 
+1. **Pré-requisitos:** Python 3.12, Node.js 18+, MySQL, Git
+2. **Instalar:** faz duplo clique em `install.bat`
+3. **Configurar:** abre `.env` e preenche as credenciais (ver tabela abaixo)
+4. **Base de dados:** importa o schema —
+   ```
+   mysql -u root -p < BD\schema_liveeyedetect.sql
+   ```
+5. **Iniciar:** faz duplo clique em `start.bat`
 
-___________________________________________________________________________________________
+Depois abre no browser:
+| Ambiente | Frontend | Backend |
+| -------- | -------- | ------- |
+| PC local | http://localhost:5173 | http://localhost:8000 |
+| Servidor | http://IP_DO_SERVIDOR:5173 | http://IP_DO_SERVIDOR:8000 |
 
-🚀 1. No outro computador: instalar o básico
+### 📋 Método manual
 
-Antes de mais, instala:
+<details>
+<summary>Clique para expandir</summary>
 
-✔️ Necessário
+#### 1. Clonar
 
-Git
-Python (mesma versão ou semelhante)
-Node.js
-
-📥 2. Clonar o projeto do GitHub
-
-No terminal:
-
+```bash
 git clone https://github.com/a14486-oficina/Projeto.git
-
-
-Depois entra na pasta:
 cd Projeto
+```
 
-🐍 3. Backend Python (YOLO)
-Criar ambiente virtual:
-python -m venv venv
-Ativar:
-Windows:
-venv\Scripts\activate
-Instalar dependências:
-pip install -r requirements.txt
+#### 2. Base de dados MySQL
 
+```bash
+mysql -u root -p < BD/schema_liveeyedetect.sql
+```
 
-⚠️ Importante (YOLO .pt)
-Se o modelo .pt não estiver no GitHub:
+#### 3. Configurar variáveis de ambiente
 
-copiar manualmente do outro PC
-OU
-fazer download automático no código
-Rodar Python server:
-python python/server.py
+```bash
+copy .env.example .env
+```
 
-🌐 4. Backend Node.js
-Vai para a pasta:
-cd server
+Abre o `.env` e preenche:
 
-Instalar dependências:
-npm install
-Rodar:
-node server.js
+| Variável            | Onde obter                                                |
+| ------------------- | --------------------------------------------------------- |
+| `QDRANT_URL`        | Dashboard do Qdrant Cloud                                 |
+| `QDRANT_API_KEY`    | Dashboard do Qdrant Cloud (API Key)                       |
+| `MySQL_*`           | As tuas credenciais MySQL                                 |
+| `GMAIL_USER`        | Gmail que vai enviar emails de recuperação                |
+| `GMAIL_APP_PASSWORD`| App Password do Gmail                                     |
+| `ADMIN_EMAIL`       | Email do admin (tem de existir na tabela `utilizadores`)  |
 
-🌍 5. Frontend (public)
-Normalmente:
-👉 só abres o HTML:
-public/receiver.html
+#### 4. Backend Python
 
-🧠 6. Ordem correta para correr tudo
-👉 SEMPRE nesta ordem:
-Python (YOLO backend)
-Node server
-Frontend (browser)
-
-⚠️ Problemas comuns
-❌ "module not found"
-→ faltou pip install -r requirements.txt
-❌ YOLO não funciona
-→ faltou .pt model
-❌ WebSocket não liga
-→ Node server não está a correr
-
-💡 Dica profissional (muito importante)
-
-Se quiseres facilitar MUITO a vida:
-
-👉 cria um start.bat:
-
-@echo off
-start cmd /k "cd python && venv\Scripts\activate && python server.py"
-start cmd /k "cd server && node server.js"
-🚀 Resumo simples
-
-No outro PC:
-
-git clone <repo>
-cd projeto
+```bash
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-cd server
+```
+
+> **Nota (Windows):** `dlib` (usado pelo `face_recognition`) precisa de CMake + C++ Build Tools. Se falhar, segue: https://github.com/ageitgey/face_recognition
+
+Iniciar:
+
+```bash
+cd python
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### 5. Frontend React
+
+```bash
+cd liveeye
 npm install
-node server.js
+npm run dev
+```
 
-Se quiseres, posso ajudar-te a dar o próximo nível:
-👉 fazer isto arrancar tudo com 1 clique
-👉 ou transformar em “instalador automático”
+Abre em `http://localhost:5173`.
 
-Só diz 👍
+#### 6. Verificar
 
----------------------------------------
-coisas a fazer 
+- Backend: http://localhost:8000
+- Frontend: http://localhost:5173
 
-Ver "style" video #remoteVideo, colocar 600px
+</details>
 
-face_recognition - biblioteca em python para comprarar Embeddings (para comparar imagens)
-https://face-recognition.readthedocs.io/en/latest/face_recognition.html
-+
-openCV (para tirar um print a frame sempre qeu vir uma pessoa)
+## Docker
 
-Qdrant 
-Para guardar os embeddigns e a extra info (payloads)
+O `Dockerfile` empacota apenas o backend Python. Para construir:
 
-Depois vou criar o sistema de alertar (vibração e lanterna a piscar)
-https://stackoverflow.com/questions/68786850/turn-on-phone-flashlight-on-web-app-using-javascript-and-html
-usar o javascript
+```bash
+docker build -t liveeye-backend .
+docker run -p 10000:10000 --env-file .env liveeye-backend
+```
+
+## Endpoints principais
+
+| Método | Rota                      | Descrição                    |
+| ------ | ------------------------- | ---------------------------- |
+| POST   | `/login`                  | Autenticação                 |
+| POST   | `/registar`               | Registar com código convite  |
+| POST   | `/pessoas_criar`          | Criar pessoa desaparecida    |
+| GET    | `/pessoas_listar`         | Listar desaparecidos         |
+| POST   | `/pessoas/{id}/estado`    | Marcar como encontrada       |
+| WS     | `/ws`                     | WebSocket para deteção video |
+| WS     | `/ws-signal`              | WebSocket para signaling     |
+| WS     | `/ws-monitor`             | WebSocket para monitorização |

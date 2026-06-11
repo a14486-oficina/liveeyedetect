@@ -7,7 +7,8 @@ import VideoCapture from "../components/VideoCapture";
 import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
 import AdminConvites from "../components/Adminconvites.jsx";
-import { useDetectionCount } from "../useDetectionCount.js"; // ← NOVO
+import { useDetectionCount } from "../useDetectionCount.js";
+import { API } from "../api.js";
 
 const Dashboard = () => {
   const [panel, setPanel] = useState(() => {
@@ -33,6 +34,21 @@ const Dashboard = () => {
     } catch { /* silent */ }
   }, []);
 
+  // Fetch counts on mount so sidebar badges are visible immediately after login
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const [resMissing, resFound] = await Promise.all([
+          fetch(`${API}/pessoas_listar`),
+          fetch(`${API}/pessoas_listar_encontradas`),
+        ]);
+        const [missing, found] = await Promise.all([resMissing.json(), resFound.json()]);
+        setCounts({ missing: missing.length, found: found.length });
+      } catch { /* silent */ }
+    };
+    fetchCounts();
+  }, []);
+
   const handleAddNavigate = () => {
     setPanel("missing");
   };
@@ -56,12 +72,12 @@ const Dashboard = () => {
   const isFullscreen = panel === "receiver" || panel === "camera";
 
   const MOBILE_NAV = [
-    { id: "add",      icon: "＋", label: "Adicionar" },
-    { id: "missing",  icon: "◎",  label: "Desapar." },
-    { id: "found",    icon: "✓",  label: "Encontr." },
-    { id: "camera",   icon: "⬤",  label: "Emissor" },
-    { id: "receiver", icon: "▶",  label: "Recetor" },
-    ...(isAdmin ? [{ id: "admin", icon: "⚑", label: "Admin" }] : []),
+    { id: "add",       label: "Adicionar" },
+    { id: "missing",    label: "Desapar." },
+    { id: "found",      label: "Encontr." },
+    { id: "camera",     label: "Emissor" },
+    { id: "receiver",   label: "Recetor" },
+    ...(isAdmin ? [{ id: "admin", label: "Admin" }] : []),
   ];
 
   return (

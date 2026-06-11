@@ -2,18 +2,18 @@ import { useState, useEffect } from "react";
 import UserMenu from "./UserMenu";
 
 const NAV_GESTAO = [
-  { id: "add",      label: "Adicionar",    icon: "＋" },
-  { id: "missing",  label: "Desaparecidas", icon: "◎" },
-  { id: "found",    label: "Encontradas",  icon: "✓" },
+  { id: "add",      label: "Adicionar"},
+  { id: "missing",  label: "Desaparecidas"},
+  { id: "found",    label: "Encontradas"},
 ];
 
 const NAV_SISTEMA = [
-  { id: "camera",   label: "Emissor",  icon: "⬤" },
-  { id: "receiver", label: "Recetor",  icon: "▶" },
+  { id: "camera",   label: "Emissor"},
+  { id: "receiver", label: "Recetor"},
 ];
 
 const NAV_ADMIN = [
-  { id: "admin", label: "Convites", icon: "⚑" },
+  { id: "admin", label: "Convites"},
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {
@@ -77,11 +77,6 @@ const Sidebar = ({ active, onNavigate, counts }) => {
           </span>
         </div>
 
-        <span style={{
-          fontSize: "10px", color: "var(--text-muted)",
-          letterSpacing: "0.1em", textTransform: "uppercase",
-          fontFamily: "var(--font-mono)",
-        }}>Sistema PAP</span>
       </div>
 
       {/* Nav */}
@@ -138,10 +133,6 @@ const Sidebar = ({ active, onNavigate, counts }) => {
         gap: "10px",
       }}>
         <UserMenu onNavigate={onNavigate} />
-        <span style={{
-          fontSize: "10px", color: "var(--text-muted)",
-          fontFamily: "var(--font-mono)", letterSpacing: "0.06em",
-        }}>v1.0.0</span>
       </div>
     </aside>
   );

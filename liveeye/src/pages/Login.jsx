@@ -100,9 +100,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
         <h1 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>
           Bem-vindo ao LiveEye
         </h1>
-        <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", margin: 0 }}>
-          Sistema PAP · Acesso restrito
-        </p>
+
       </div>
 
       <div style={s.group}>
@@ -140,11 +138,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
       </button>
       <button onClick={onRegister} style={s.btnOutline}>Criar conta</button>
 
-      <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--border)", textAlign: "center" }}>
-        <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-          Acesso apenas para operadores autorizados
-        </span>
-      </div>
+
     </>
   );
 };
@@ -459,13 +453,6 @@ const Login = () => {
           </div>
         </main>
 
-        <footer style={{
-          padding: "12px 20px", borderTop: "1px solid var(--border)",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>v1.0.0</span>
-          <span style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>LiveEye · Sistema PAP</span>
-        </footer>
       </div>
     </>
   );

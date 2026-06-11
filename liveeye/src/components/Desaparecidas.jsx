@@ -226,34 +226,56 @@ const PhotoGallery = ({ imagens }) => {
         Fotografias ({imagens.length})
       </span>
 
-      {/* Grelha de miniaturas clicáveis */}
+      {/* Grelha de miniaturas clicáveis — sempre 3 colunas para manter proporções */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: `repeat(${Math.min(imagens.length, 4)}, 1fr)`,
+        gridTemplateColumns: "repeat(3, 1fr)",
         gap: "8px",
       }}>
-        {imagens.map((b64, i) => (
-          <button
-            key={i}
-            onClick={() => open(i)}
-            title="Clique para ampliar"
-            style={{
-              aspectRatio: "1 / 1", padding: 0, border: "none",
-              borderRadius: "8px", overflow: "hidden", cursor: "zoom-in",
-              background: "var(--bg-raised)",
-              outline: "2px solid transparent", outlineOffset: "2px",
-              transition: "outline-color 0.15s, opacity 0.15s, transform 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.outlineColor = "var(--accent)"; e.currentTarget.style.transform = "scale(1.03)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.outlineColor = "transparent"; e.currentTarget.style.transform = "scale(1)"; }}
-          >
-            <img
-              src={`data:image/jpeg;base64,${b64}`}
-              alt={`Foto ${i + 1}`}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          </button>
-        ))}
+        {Array.from({ length: 3 }).map((_, i) => {
+          const b64 = imagens[i];
+          if (b64) {
+            return (
+              <button
+                key={i}
+                onClick={() => open(i)}
+                title="Clique para ampliar"
+                style={{
+                  aspectRatio: "1 / 1", padding: 0, border: "none",
+                  borderRadius: "8px", overflow: "hidden", cursor: "zoom-in",
+                  background: "var(--bg-raised)",
+                  outline: "2px solid transparent", outlineOffset: "2px",
+                  transition: "outline-color 0.15s, opacity 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.outlineColor = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.outlineColor = "transparent"; }}
+              >
+                <img
+                  src={`data:image/jpeg;base64,${b64}`}
+                  alt={`Foto ${i + 1}`}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              </button>
+            );
+          }
+          return (
+            <div
+              key={i}
+              style={{
+                aspectRatio: "1 / 1", borderRadius: "8px",
+                background: "var(--bg-raised)", border: "1px dashed var(--border)",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: "6px",
+              }}
+            >
+              <span style={{
+                fontSize: "10px", fontFamily: "var(--font-mono)",
+                color: "var(--text-muted)", textAlign: "center",
+                lineHeight: 1.4, padding: "0 8px",
+              }}>Foto não inserida</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Lightbox */}
@@ -327,29 +349,44 @@ const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
       boxShadow: isNew ? "0 0 8px rgba(231,76,60,0.25)" : "var(--shadow-sm)",
     }}>
       {/* Cabeçalho da linha */}
-      <button onClick={toggleOpen} style={{
-        width: "100%", padding: "13px 16px", display: "flex", alignItems: "center", gap: "9px",
-        background: "none", border: "none", cursor: "pointer", textAlign: "left",
-      }}>
-        <span style={{
-          fontSize: "8px", color: "var(--text-muted)", transition: "transform 0.18s",
-          transform: open ? "rotate(90deg)" : "rotate(0deg)", display: "inline-block", flexShrink: 0,
-        }}>▶</span>
-        <span style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: 0 }}>
-          {isNew && (
-            <span style={{
-              width: "8px", height: "8px", borderRadius: "50%",
-              background: "#e74c3c", flexShrink: 0,
-              boxShadow: "0 0 6px rgba(231,76,60,0.6)",
-            }} />
-          )}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pessoa.nome}</span>
-        </span>
-      </button>
+      <div style={{ padding: "13px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <button onClick={toggleOpen} style={{
+          flex: 1, display: "flex", alignItems: "center", gap: "9px",
+          background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0,
+        }}>
+          <span style={{
+            fontSize: "8px", color: "var(--text-muted)", transition: "transform 0.18s",
+            transform: open ? "rotate(90deg)" : "rotate(0deg)", display: "inline-block",
+          }}>▶</span>
+          <span style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
+            {isNew && (
+              <span style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: "#e74c3c", flexShrink: 0,
+                boxShadow: "0 0 6px rgba(231,76,60,0.6)",
+              }} />
+            )}
+            {pessoa.nome}
+          </span>
+        </button>
+
+        <div style={{ display: "flex", gap: "6px" }}>
+          <button onClick={() => setAddingLoc((a) => !a)} style={{
+            background: "var(--bg-raised)", border: "1px solid var(--border)",
+            borderRadius: "6px", color: "var(--text-secondary)", fontSize: "12px",
+            padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
+          }}>Novo avistamento</button>
+          <button onClick={marcarEncontrada} style={{
+            background: "var(--success-light)", border: "1px solid var(--success-border)",
+            borderRadius: "6px", color: "var(--success)", fontSize: "12px",
+            padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
+          }}>Foi encontrada?</button>
+        </div>
+      </div>
 
       {/* Formulário nova localização */}
       {addingLoc && (
-        <div style={{ padding: "13px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-raised)" }}>
+        <div style={{ padding: "13px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-surface)" }}>
           <p style={{ ...s.label, marginBottom: "10px" }}>Nova localização</p>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {[["lat", "Latitude"], ["lon", "Longitude"], ["data", "Data DD/MM/AAAA"], ["hora", "Hora HH:MM"]].map(([k, ph]) => (
@@ -372,22 +409,6 @@ const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
           padding: "16px 16px 18px", borderTop: "1px solid var(--border)",
           animation: "fadeIn 0.18s ease",
         }}>
-          {/* Botões de ação */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-            <button onClick={() => setAddingLoc((a) => !a)} style={{
-              flex: 1, background: "var(--bg-raised)", border: "1px solid var(--border)",
-              borderRadius: "7px", color: "var(--text-secondary)", fontSize: "13px",
-              padding: "8px 14px", cursor: "pointer", fontFamily: "var(--font-sans)",
-              minWidth: "120px",
-            }}>+ Novo avistamento</button>
-            <button onClick={marcarEncontrada} style={{
-              flex: 1, background: "var(--success-light)", border: "1px solid var(--success-border)",
-              borderRadius: "7px", color: "var(--success)", fontSize: "13px",
-              padding: "8px 14px", cursor: "pointer", fontFamily: "var(--font-sans)",
-              minWidth: "120px",
-            }}>Foi encontrada?</button>
-          </div>
-
           {loadingDetails ? (
             <p style={{ color: "var(--text-muted)", fontSize: "13px", fontFamily: "var(--font-mono)" }}>
               A carregar...

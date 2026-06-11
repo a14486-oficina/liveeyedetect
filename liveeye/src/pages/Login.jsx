@@ -145,7 +145,7 @@ const PainelLogin = ({ onRegister, onRecover }) => {
 
 const PainelRegisto = ({ onBack }) => {
   const navigate = useNavigate();
-  const [form, setForm]         = useState({ nome: "", email: "", pass: "", pass2: "", convite: "" });
+  const [form, setForm]         = useState({ nome: "", email: "", pass: "", pass2: "" });
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -153,8 +153,6 @@ const PainelRegisto = ({ onBack }) => {
 
   const handleSubmit = async () => {
     setError("");
-    if (!form.convite.trim())
-      { setError("Introduz o código de convite."); return; }
     if (!form.nome.trim() || !form.email.trim() || !form.pass || !form.pass2)
       { setError("Preenche todos os campos."); return; }
     if (!emailRegex.test(form.email.trim()))
@@ -171,7 +169,6 @@ const PainelRegisto = ({ onBack }) => {
           nome: form.nome.trim(),
           email: form.email.trim().toLowerCase(),
           password: form.pass,
-          codigo_convite: form.convite.trim().toUpperCase(),
         }),
       });
       const data = await res.json();
@@ -188,23 +185,9 @@ const PainelRegisto = ({ onBack }) => {
         <Logo />
         <h1 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>Criar conta</h1>
         <p style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", margin: 0 }}>
-          Precisas de um código de convite para te registares
+          Regista-te gratuitamente
         </p>
       </div>
-
-      {/* Código de convite — em destaque no topo */}
-      <div style={s.group}>
-        <label style={s.label}>Código de convite</label>
-        <input
-          style={{ ...s.input, fontFamily: "var(--font-mono)", letterSpacing: "0.15em", textTransform: "uppercase" }}
-          type="text" value={form.convite}
-          onChange={(e) => setForm((f) => ({ ...f, convite: e.target.value.replace(/\s/g, "") }))}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          onFocus={inputFocus} onBlur={inputBlur}
-          placeholder="ex: A3F9B12C" autoFocus maxLength={16} />
-      </div>
-
-      <div style={{ height: "1px", background: "var(--border)", margin: "4px 0 16px" }} />
 
       {[
         { label: "Nome completo", key: "nome", type: "text",     ph: "ex: João Silva",           auto: "name" },

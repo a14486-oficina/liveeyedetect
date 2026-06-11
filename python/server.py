@@ -377,29 +377,9 @@ def registar(request: Request, body: RegistarBody):
     if not _rate_limit(request, max_attempts=3, window_sec=60):
         return {"erro": "Demasiadas tentativas. Tenta novamente dentro de 1 minuto."}
 
-    if not body.codigo_convite.strip():
-        return {"erro": "Código de convite obrigatório"}
-
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
-        # Verificar se o código existe e não foi usado
-        cursor.execute(
-            "SELECT * FROM convites WHERE codigo_validacao = %s",
-            (body.codigo_convite.strip().upper(),)
-        )
-        convite = cursor.fetchone()
-
-        if not convite:
-            cursor.close()
-            db.close()
-            return {"erro": "Código de convite inválido"}
-
-        if convite["codigo_usado"]:
-            cursor.close()
-            db.close()
-            return {"erro": "Este código de convite já foi utilizado"}
 
         # Criar o utilizador
         hashed = pwd_context.hash(body.password[:72])
@@ -408,12 +388,6 @@ def registar(request: Request, body: RegistarBody):
             (body.email, hashed, body.nome)
         )
         novo_id = cursor.lastrowid
-
-        # Marcar o convite como usado
-        cursor.execute(
-            "UPDATE convites SET codigo_usado = TRUE WHERE codigo_validacao = %s",
-            (body.codigo_convite.strip().upper(),)
-        )
         db.commit()
 
         # Devolver os dados do novo utilizador para auto-login

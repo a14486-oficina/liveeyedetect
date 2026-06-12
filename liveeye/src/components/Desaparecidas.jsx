@@ -293,7 +293,7 @@ const PhotoGallery = ({ imagens }) => {
 };
 
 // ─── Linha de pessoa ──────────────────────────────────────────────────────────
-const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
+const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge, isAdmin }) => {
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -370,22 +370,24 @@ const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
           </span>
         </button>
 
-        <div style={{ display: "flex", gap: "6px" }}>
-          <button onClick={() => setAddingLoc((a) => !a)} style={{
-            background: "var(--bg-raised)", border: "1px solid var(--border)",
-            borderRadius: "6px", color: "var(--text-secondary)", fontSize: "12px",
-            padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
-          }}>Novo avistamento</button>
-          <button onClick={marcarEncontrada} style={{
-            background: "var(--success-light)", border: "1px solid var(--success-border)",
-            borderRadius: "6px", color: "var(--success)", fontSize: "12px",
-            padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
-          }}>Foi encontrada?</button>
-        </div>
+        {isAdmin && (
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button onClick={() => setAddingLoc((a) => !a)} style={{
+              background: "var(--bg-raised)", border: "1px solid var(--border)",
+              borderRadius: "6px", color: "var(--text-secondary)", fontSize: "12px",
+              padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
+            }}>Novo avistamento</button>
+            <button onClick={marcarEncontrada} style={{
+              background: "var(--success-light)", border: "1px solid var(--success-border)",
+              borderRadius: "6px", color: "var(--success)", fontSize: "12px",
+              padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)",
+            }}>Foi encontrada?</button>
+          </div>
+        )}
       </div>
 
       {/* Formulário nova localização */}
-      {addingLoc && (
+      {isAdmin && addingLoc && (
         <div style={{ padding: "13px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-surface)" }}>
           <p style={{ ...s.label, marginBottom: "10px" }}>Nova localização</p>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -493,7 +495,18 @@ const PersonRow = ({ pessoa, onFoundSuccess, detectedIds, onAcknowledge }) => {
 const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
   const [pessoas, setPessoas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [detectedIds, setDetectedIds] = useState(new Set()); // person_ids com deteções não vistas
+  const [detectedIds, setDetectedIds] = useState(new Set());
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("liveeye_user");
+      if (raw) {
+        const user = JSON.parse(raw);
+        if (user?.isAdmin) setIsAdmin(true);
+      }
+    } catch { /* silent */ }
+  }, []);
 
   // Polling ao servidor a cada 5s para saber quais pessoas têm deteções novas
   const fetchDetected = useCallback(async () => {
@@ -578,7 +591,7 @@ const Desaparecidas = forwardRef(({ onCountChange }, ref) => {
           </p>
         </div>
       ) : (
-        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} detectedIds={detectedIds} onAcknowledge={handleAcknowledge} />)
+        pessoas.map((p) => <PersonRow key={p.id} pessoa={p} onFoundSuccess={handleFound} detectedIds={detectedIds} onAcknowledge={handleAcknowledge} isAdmin={isAdmin} />)
       )}
 
       <style>{`

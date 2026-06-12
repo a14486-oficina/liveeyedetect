@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import UserMenu from "./UserMenu";
 
 const NAV_GESTAO = [
-  { id: "add",      label: "Adicionar"},
   { id: "missing",  label: "Desaparecidas"},
   { id: "found",    label: "Encontradas"},
 ];
@@ -12,8 +11,10 @@ const NAV_SISTEMA = [
   { id: "receiver", label: "Recetor"},
 ];
 
+// Painéis exclusivos de administrador
 const NAV_ADMIN = [
-  { id: "admin", label: "Convites"},
+  { id: "add",   label: "Adicionar Pessoa" },
+  { id: "admin", label: "Convites" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {

@@ -12,7 +12,9 @@ import { API } from "../api.js";
 
 const Dashboard = () => {
   const [panel, setPanel] = useState(() => {
-    return sessionStorage.getItem("liveeye_panel") || "add";
+    const saved = sessionStorage.getItem("liveeye_panel") || "missing";
+    // Painéis exclusivos de admin — serão validados após carregar isAdmin
+    return saved;
   });
   const [counts, setCounts] = useState({ missing: 0, found: 0 });
   const desaparecedasRef = useRef(null);
@@ -29,7 +31,13 @@ const Dashboard = () => {
       const raw = sessionStorage.getItem("liveeye_user");
       if (raw) {
         const user = JSON.parse(raw);
-        if (user?.isAdmin) setIsAdmin(true);
+        const admin = !!user?.isAdmin;
+        setIsAdmin(admin);
+        // Se não for admin mas tiver um painel exclusivo de admin guardado, redirecionar
+        if (!admin && (panel === "add" || panel === "admin")) {
+          setPanel("missing");
+          sessionStorage.setItem("liveeye_panel", "missing");
+        }
       }
     } catch { /* silent */ }
   }, []);
@@ -72,7 +80,7 @@ const Dashboard = () => {
   const isFullscreen = panel === "receiver" || panel === "camera";
 
   const MOBILE_NAV = [
-    { id: "add",       label: "Adicionar" },
+    ...(isAdmin ? [{ id: "add", label: "Adicionar" }] : []),
     { id: "missing",    label: "Desapar." },
     { id: "found",      label: "Encontr." },
     { id: "camera",     label: "Emissor" },
@@ -214,7 +222,7 @@ const Dashboard = () => {
         >
           <div className="dash-mobile-spacer" />
 
-          {panel === "add" && <AddPessoa onNavigate={handleAddNavigate} onRefresh={handleAddRefresh} />}
+          {panel === "add" && isAdmin && <AddPessoa onNavigate={handleAddNavigate} onRefresh={handleAddRefresh} />}
           {panel === "missing" && (
             <Desaparecidas
               ref={desaparecedasRef}

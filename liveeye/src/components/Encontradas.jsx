@@ -59,11 +59,6 @@ const FoundRow = ({ pessoa }) => {
           <span style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>
             {pessoa.nome}
           </span>
-          <span style={{
-            fontSize: "10px", fontFamily: "var(--font-mono)",
-            background: "var(--success-light)", color: "var(--success)",
-            padding: "2px 8px", borderRadius: "99px", border: "1px solid var(--success-border)",
-          }}>Localizada</span>
           {ultimaLoc && (
             <span style={{
               marginLeft: "8px", fontFamily: "var(--font-mono)", fontSize: "11px",

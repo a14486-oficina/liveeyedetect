@@ -6,7 +6,7 @@ import Encontradas from "../components/Encontradas";
 import VideoCapture from "../components/VideoCapture";
 import UserSettings from "../components/UserSettings";
 import Receiver from "./Receiver";
-import AdminConvites from "../components/Adminconvites.jsx";
+
 import { useDetectionCount } from "../useDetectionCount.js";
 import { API } from "../api.js";
 
@@ -34,7 +34,7 @@ const Dashboard = () => {
         const admin = !!user?.isAdmin;
         setIsAdmin(admin);
         // Se não for admin mas tiver um painel exclusivo de admin guardado, redirecionar
-        if (!admin && (panel === "add" || panel === "admin")) {
+        if (!admin && panel === "add") {
           setPanel("missing");
           sessionStorage.setItem("liveeye_panel", "missing");
         }
@@ -85,7 +85,6 @@ const Dashboard = () => {
     { id: "found",      label: "Encontr." },
     { id: "camera",     label: "Emissor" },
     { id: "receiver",   label: "Recetor" },
-    ...(isAdmin ? [{ id: "admin", label: "Admin" }] : []),
   ];
 
   return (
@@ -238,7 +237,7 @@ const Dashboard = () => {
           {panel === "camera" && <VideoCapture />}
           {panel === "receiver" && <Receiver />}
           {panel === "settings" && <UserSettings />}
-          {panel === "admin" && <AdminConvites />}
+
         </main>
 
         {/* Mobile bottom navigation */}

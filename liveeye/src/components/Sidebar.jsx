@@ -14,7 +14,6 @@ const NAV_SISTEMA = [
 // Painéis exclusivos de administrador
 const NAV_ADMIN = [
   { id: "add",   label: "Adicionar Pessoa" },
-  { id: "admin", label: "Convites" },
 ];
 
 const Sidebar = ({ active, onNavigate, counts }) => {

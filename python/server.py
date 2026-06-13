@@ -364,12 +364,11 @@ def login(request: Request, body: LoginBody):
         return {"erro": "Erro no servidor"}
 
 
-# ── Schema para registar com convite ─────────────────────────────────────────
+# ── Schema para registar ──────────────────────────────────────────────────────
 class RegistarBody(BaseModel):
     email: str
     password: str
     nome: str = ""
-    codigo_convite: str = ""
 
 # ── Endpoint POST /registar ───────────────────────────────────────────────────
 @app.post("/registar")
@@ -435,84 +434,6 @@ def verificar_admin(password_inserida: str) -> bool:
     except Exception as e:
         print(f"Erro verificar_admin: {e}")
         return False
-
-# ── Schema para gerar convite ─────────────────────────────────────────────────
-class GerarConviteBody(BaseModel):
-    admin_password: str
-
-# ── Endpoint POST /admin/gerar_convite ────────────────────────────────────────
-@app.post("/admin/gerar_convite")
-def gerar_convite(request: Request, body: GerarConviteBody):
-    """
-    Gera um novo código de convite de uso único.
-    Protegido por uma password de admin definida no .env (ADMIN_PASSWORD).
-    """
-    if not _rate_limit(request, max_attempts=10, window_sec=60):
-        return {"erro": "Demasiadas tentativas. Tenta novamente dentro de 1 minuto."}
-
-    if not verificar_admin(body.admin_password):
-        return {"erro": "Acesso negado"}
-
-    codigo = secrets.token_hex(4).upper()  # ex: A3F9B12C
-
-    try:
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO convites (codigo_validacao, codigo_usado) VALUES (%s, FALSE)",
-            (codigo,)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
-        return {"status": "ok", "codigo": codigo}
-    except Exception as e:
-        print(f"Erro gerar_convite: {e}")
-        return {"erro": f"Erro ao gerar convite: {str(e)}"}
-
-
-# ── Endpoint POST /admin/convites ─────────────────────────────────────────────
-# NOTA: usa POST (não GET) para enviar a password de admin no body com segurança
-@app.post("/admin/convites")
-def listar_convites(body: GerarConviteBody):
-    """Lista todos os convites (usados e por usar). Requer password de admin."""
-    if not verificar_admin(body.admin_password):
-        return {"erro": "Acesso negado"}
-
-    try:
-        db = get_db()
-        cursor = db.cursor(dictionary=True)
-
-        # Detecta o nome da coluna PK e se existe created_at
-        cursor.execute("SHOW COLUMNS FROM convites")
-        cols = [row["Field"] for row in cursor.fetchall()]
-        pk = "id_convite" if "id_convite" in cols else "id"
-        has_created = "created_at" in cols
-
-        select_created = ", created_at" if has_created else ""
-        cursor.execute(
-            f"SELECT {pk} AS id, codigo_validacao, codigo_usado{select_created} "
-            f"FROM convites ORDER BY {pk} DESC"
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        db.close()
-
-        # Serializar datetime para string
-        result = []
-        for r in rows:
-            created = r.get("created_at")
-            result.append({
-                "id": r["id"],
-                "codigo_validacao": r["codigo_validacao"],
-                "codigo_usado": bool(r["codigo_usado"]),
-                "created_at": created.isoformat() if created and hasattr(created, "isoformat") else str(created) if created else None,
-            })
-
-        return {"status": "ok", "convites": result}
-    except Exception as e:
-        print(f"Erro listar_convites: {e}")
-        return {"erro": f"Erro no servidor: {str(e)}"}
 
 
 _codigos_recuperacao: dict = {}

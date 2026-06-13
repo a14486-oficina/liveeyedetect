@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 11-Jun-2026 às 11:02
+-- Tempo de geração: 14-Jun-2026 às 00:00
 -- Versão do servidor: 10.4.32-MariaDB
 -- versão do PHP: 8.2.12
 
@@ -22,21 +22,6 @@ SET time_zone = "+00:00";
 --
 CREATE DATABASE IF NOT EXISTS `liveeyedetect` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE `liveeyedetect`;
-
--- --------------------------------------------------------
-
---
--- Estrutura da tabela `convites`
---
-
-DROP TABLE IF EXISTS `convites`;
-CREATE TABLE `convites` (
-  `id_convite` int(11) NOT NULL,
-  `codigo_validacao` varchar(16) NOT NULL,
-  `codigo_usado` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -85,13 +70,6 @@ INSERT INTO `utilizadores` (`id_utilizador`, `email`, `password`, `nome`, `creat
 --
 
 --
--- Índices para tabela `convites`
---
-ALTER TABLE `convites`
-  ADD PRIMARY KEY (`id_convite`),
-  ADD UNIQUE KEY `uq_codigo` (`codigo_validacao`);
-
---
 -- Índices para tabela `detecoes`
 --
 ALTER TABLE `detecoes`
@@ -110,12 +88,6 @@ ALTER TABLE `utilizadores`
 --
 -- AUTO_INCREMENT de tabelas despejadas
 --
-
---
--- AUTO_INCREMENT de tabela `convites`
---
-ALTER TABLE `convites`
-  MODIFY `id_convite` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de tabela `detecoes`

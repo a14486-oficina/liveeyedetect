@@ -144,7 +144,7 @@ Abre o ficheiro `.env` no Bloco de Notas e preenche os valores:
 | `GMAIL_USER` | ✅ Já preenchido | `liveeyedetect@gmail.com` — não mexer |
 | `GMAIL_APP_PASSWORD` | ✅ Já preenchido | Não mexer |
 | `ADMIN_EMAIL` | ✅ Já preenchido | `a14486@oficina.pt` — não mexer |
-| `ADMIN_PASSWORD` | ⚠️ **Preencher** | Escolhe uma password para o admin |
+| `ADMIN_PASSWORD` |  ✅ Já preenchido |
 
 > ⚠️ **Importante:** O `.env` contém credenciais sensíveis. **Nunca** partilhes este ficheiro nem o adiciones ao Git (já está no `.gitignore`).
 
